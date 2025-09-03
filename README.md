@@ -37,7 +37,7 @@ Install dependencies:
 
 pip install -r requirements.txt
 
-📊 Usage
+## 📊 Usage
 
 Run the recommender:
 
@@ -49,7 +49,7 @@ Or explore the data with:
 python movie_loader.py
 
 
-📚 Dataset
+## 📚 Dataset
 
 keywords.csv
 
@@ -60,17 +60,14 @@ ratings_small.csv
 Datasets are from The Movies Dataset on Kaggle
 
 
-🤝 Contributing
+## 🤝 Contributing
 
 Pull requests are welcome! For major changes, please open an issue first to discuss what you’d like to change.
 
-📜 License
+##📜 License
 
 This project is licensed under the MIT License.
 
 
 3. Scroll down → Click **Commit changes**.  
 
----
-
-👉 Do you also want me to prepare a `requirements.txt` so people can run your code easily?
