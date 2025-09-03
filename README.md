@@ -32,3 +32,45 @@ Clone the repository:
 ```bash
 git clone https://github.com/Azna526/Netflix-movie-recommender.git
 cd Netflix-movie-recommender
+
+Install dependencies:
+
+pip install -r requirements.txt
+
+📊 Usage
+
+Run the recommender:
+
+python movie_recommender.py
+
+
+Or explore the data with:
+
+python movie_loader.py
+
+
+📚 Dataset
+
+keywords.csv
+
+links.csv / links_small.csv
+
+ratings_small.csv
+
+Datasets are from The Movies Dataset on Kaggle
+
+
+🤝 Contributing
+
+Pull requests are welcome! For major changes, please open an issue first to discuss what you’d like to change.
+
+📜 License
+
+This project is licensed under the MIT License.
+
+
+3. Scroll down → Click **Commit changes**.  
+
+---
+
+👉 Do you also want me to prepare a `requirements.txt` so people can run your code easily?
