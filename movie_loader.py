@@ -1,34 +1,32 @@
-import pandas as pd
-import os
-from kaggle.api.kaggle_api_extended import KaggleApi
-import streamlit as st
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 @st.cache_data
 def load_datasets():
-    """Download and load the TMDB dataset (movies + similarity)."""
     api = KaggleApi()
     api.authenticate()
-
-    # Download dataset (only first time)
     dataset = "rounakbanik/the-movies-dataset"
     data_dir = "data"
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
         api.dataset_download_files(dataset, path=data_dir, unzip=True)
 
-    # Load movies
     movies = pd.read_csv(os.path.join(data_dir, "movies_metadata.csv"), low_memory=False)
 
-    # Ensure movie IDs are integers (for TMDB API)
+    # Clean IDs
     movies = movies.dropna(subset=["id"])
     movies["id"] = movies["id"].astype(str).str.replace(r"\D", "", regex=True)
     movies = movies[movies["id"] != ""]
     movies["id"] = movies["id"].astype(int)
 
-    # Use only relevant columns
+    # Select only needed columns
     movies = movies[["id", "original_title", "overview", "release_date", "vote_average"]]
+    movies = movies.dropna(subset=["overview"])
 
-    # Load similarity (you generated this in Jupyter Notebook)
-    similarity = pd.read_pickle(os.path.join(data_dir, "similarity.pkl"))
+    # Build similarity matrix dynamically
+    tfidf = TfidfVectorizer(stop_words="english")
+    tfidf_matrix = tfidf.fit_transform(movies["overview"])
+    similarity = cosine_similarity(tfidf_matrix, tfidf_matrix)
 
     return movies, similarity
+
