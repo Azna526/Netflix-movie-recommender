@@ -6,6 +6,8 @@ import os
 from movie_loader import load_datasets, build_similarity
 import numpy as np
 
+movies = pickle.load(open("movies.pkl", "rb"))
+similarity = pickle.load(open("similarity.pkl", "rb"))
 # -------------------------------
 # TMDB API Key from Streamlit Secrets
 # -------------------------------
