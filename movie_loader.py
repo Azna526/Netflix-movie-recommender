@@ -1,30 +1,23 @@
 import os
+import subprocess
 import pandas as pd
 import streamlit as st
-from kaggle.api.kaggle_api_extended import KaggleApi
 
 @st.cache_data
 def load_movies():
-    # Set Kaggle credentials from secrets
+    # Set Kaggle credentials from Streamlit secrets
     os.environ["KAGGLE_USERNAME"] = st.secrets["KAGGLE_USERNAME"]
     os.environ["KAGGLE_KEY"] = st.secrets["KAGGLE_KEY"]
 
-    api = KaggleApi()
-    api.authenticate()
+    dataset = "rounakbanik/the-movies-dataset"
 
-    # Create data directory if it doesn’t exist
-    if not os.path.exists("data"):
-        os.makedirs("data")
-
-    # Download dataset if not already there
-    file_path = "data/movies_metadata.csv"
-    if not os.path.exists(file_path):
-        api.dataset_download_files(
-            "rounakbanik/the-movies-dataset",
-            path="data",
-            unzip=True
+    # Download dataset if not exists
+    if not os.path.exists("movies_metadata.csv"):
+        subprocess.run(
+            ["kaggle", "datasets", "download", "-d", dataset, "--unzip"],
+            check=True
         )
 
-    # Load only necessary columns to reduce memory usage
-    df = pd.read_csv(file_path, low_memory=False)
-    return df
+    # Load the dataset
+    movies = pd.read_csv("movies_metadata.csv", low_memory=False)
+    return movies
