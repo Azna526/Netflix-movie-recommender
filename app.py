@@ -1,85 +1,69 @@
 import streamlit as st
-import pickle
 import pandas as pd
-import os
 import requests
+from movie_loader import load_datasets, build_similarity
 
-# --- Load Data ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MOVIES_FILE = os.path.join(BASE_DIR, "movies_metadata.csv")
-SIM_FILE = os.path.join(BASE_DIR, "similarity.pkl")
+# --- TMDB API Key ---
+TMDB_API_KEY = "your_tmdb_api_key_here"  # 🔴 Replace with your TMDB API key
 
-# Load movies
-movies = pd.read_csv(MOVIES_FILE, low_memory=False)
+st.title("🎬 Netflix Movie Recommender (with Posters)")
 
-# Ensure we have a title column
+@st.cache_data(show_spinner=False)
+def get_data_and_similarity():
+    movies, ratings, credits, keywords, links = load_datasets()
+    similarity = build_similarity(movies)
+    return movies, similarity
+
+with st.spinner("⏳ Downloading dataset from Kaggle and building similarity..."):
+    movies, similarity = get_data_and_similarity()
+
+# Pick title column
 if "original_title" in movies.columns:
     title_col = "original_title"
 elif "title" in movies.columns:
     title_col = "title"
 else:
-    st.error("No title column found in movies dataset!")
+    st.error("No title column found in dataset!")
     st.stop()
 
-# Load similarity matrix
-if os.path.exists(SIM_FILE):
-    with open(SIM_FILE, "rb") as f:
-        similarity = pickle.load(f)
-else:
-    st.error("similarity.pkl not found! Run the notebook first to generate it.")
-    st.stop()
-
-# --- Helper: Fetch Poster from TMDB ---
-API_KEY = "your_tmdb_api_key"   # 🔴 replace with your TMDB key
-
+# --- Helper: Fetch Poster ---
 def fetch_poster(movie_id):
-    """Fetch movie poster from TMDB API given the TMDB movie id"""
     try:
-        url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US"
+        url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
         response = requests.get(url)
         data = response.json()
         poster_path = data.get("poster_path")
         if poster_path:
             return "https://image.tmdb.org/t/p/w500" + poster_path
-        else:
-            return None
     except Exception:
         return None
+    return None
 
 # --- Recommend Function ---
 def recommend(movie, n=5):
     matches = movies[movies[title_col].str.lower() == movie.lower()]
     if matches.empty:
         return [], []
-    
     idx = matches.index[0]
-    if idx >= similarity.shape[0]:
-        return [], []
-    
     distances = list(enumerate(similarity[idx]))
     distances = sorted(distances, key=lambda x: x[1], reverse=True)[1:n+1]
     rec_idxs = [i for i, _ in distances]
 
     rec_movies = movies.iloc[rec_idxs]
-
     titles = rec_movies[title_col].tolist()
     ids = rec_movies["id"].astype(str).tolist() if "id" in rec_movies.columns else [None] * len(titles)
-
-    posters = [fetch_poster(mid) if mid is not None else None for mid in ids]
+    posters = [fetch_poster(mid) if mid else None for mid in ids]
 
     return titles, posters
 
 # --- Streamlit UI ---
-st.title("🎬 Netflix Movie Recommender")
-
 movie_list = movies[title_col].dropna().unique()
 selected_movie = st.selectbox("Choose a movie:", movie_list)
 
 if st.button("Recommend"):
     titles, posters = recommend(selected_movie, 5)
-
     if titles:
-        st.write("### Recommended Movies:")
+        st.success("Here are some recommendations:")
         cols = st.columns(len(titles))
         for i, col in enumerate(cols):
             with col:
@@ -87,7 +71,4 @@ if st.button("Recommend"):
                 if posters[i]:
                     st.image(posters[i])
     else:
-        st.warning("No recommendations found. Check similarity alignment.")
-
-
-
+        st.warning("No recommendations found.")
