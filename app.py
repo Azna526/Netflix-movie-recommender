@@ -1,87 +1,54 @@
 import streamlit as st
 import pickle
 import pandas as pd
-import os
 import requests
 
-# --- Load Data ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MOVIES_FILE = os.path.join(BASE_DIR, "movies_metadata.csv")
-SIM_FILE = os.path.join(BASE_DIR, "similarity.pkl")
+# Load data
+movies = pickle.load(open('movies.pkl', 'rb'))
+similarity = pickle.load(open('similarity.pkl', 'rb'))
 
-# Load movies
-movies = pd.read_csv(MOVIES_FILE, low_memory=False)
+st.title("🎬 Netflix Movie Recommender")
 
-# Ensure we have a title column
-if "original_title" in movies.columns:
-    title_col = "original_title"
-elif "title" in movies.columns:
-    title_col = "title"
-else:
-    st.error("No title column found in movies dataset!")
-    st.stop()
-
-# Load similarity matrix
-if os.path.exists(SIM_FILE):
-    with open(SIM_FILE, "rb") as f:
-        similarity = pickle.load(f)
-else:
-    st.error("similarity.pkl not found! Run the notebook first to generate it.")
-    st.stop()
-
-# --- TMDB API ---
+# TMDB API Key from Streamlit secrets
 TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
 
+# Function to fetch poster from TMDB
 def fetch_poster(movie_id):
-    """Fetch poster from TMDB API using movie_id"""
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        poster_path = data.get("poster_path")
+        poster_path = data.get('poster_path')
         if poster_path:
-            return f"https://image.tmdb.org/t/p/w500{poster_path}"
-    return "https://via.placeholder.com/300x450?text=No+Image"
+            return "https://image.tmdb.org/t/p/w500" + poster_path
+    return "https://via.placeholder.com/300x450.png?text=No+Poster"
 
-# --- Recommend Function ---
-def recommend(movie, n=5):
-    matches = movies[movies[title_col].str.lower() == movie.lower()]
-    if matches.empty:
-        return []
-    idx = matches.index[0]
-    if idx >= similarity.shape[0]:
-        return []
-    distances = list(enumerate(similarity[idx]))
-    distances = sorted(distances, key=lambda x: x[1], reverse=True)[1:n+1]
-    rec_idxs = [i for i, _ in distances]
+# Recommendation function
+def recommend(movie):
+    movie_index = movies[movies['original_title'] == movie].index[0]
+    distances = similarity[movie_index]
+    movies_list = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:6]
 
-    recs = []
-    for i in rec_idxs:
-        movie_id = movies.loc[i, "id"] if "id" in movies.columns else None
-        poster = fetch_poster(movie_id) if movie_id is not None else None
-        recs.append({
-            "title": movies.loc[i, title_col],
-            "release_date": movies.loc[i].get("release_date", "N/A"),
-            "vote_average": movies.loc[i].get("vote_average", "N/A"),
-            "poster": poster
-        })
-    return recs
+    recommended_movies = []
+    recommended_posters = []
 
-# --- Streamlit UI ---
-st.title("🎬 Movie Recommender System with Posters")
+    for i in movies_list:
+        movie_id = movies.iloc[i[0]].id
+        recommended_movies.append(movies.iloc[i[0]].original_title)
+        recommended_posters.append(fetch_poster(movie_id))
 
-movie_list = movies[title_col].dropna().unique()
-selected_movie = st.selectbox("Choose a movie:", movie_list)
+    return recommended_movies, recommended_posters
+
+# UI
+selected_movie_name = st.selectbox("🎥 Choose a movie:", movies['original_title'].values)
 
 if st.button("Recommend"):
-    recommendations = recommend(selected_movie, 5)
-    if recommendations:
-        st.write("### Recommended Movies:")
-        cols = st.columns(5)
-        for i, rec in enumerate(recommendations):
-            with cols[i]:
-                st.image(rec["poster"], use_column_width=True)
-                st.caption(f"**{rec['title']}** ({rec['release_date']}) ⭐ {rec['vote_average']}")
-    else:
-        st.warning("No recommendations found. Check similarity alignment.")
+    names, posters = recommend(selected_movie_name)
+
+    cols = st.columns(5)
+    for idx, col in enumerate(cols):
+        with col:
+            st.text(names[idx])
+            st.image(posters[idx])
+
 
