@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 import os
 from movie_loader import load_datasets, build_similarity
+import numpy as np
 
 # -------------------------------
 # TMDB API Key from Streamlit Secrets
