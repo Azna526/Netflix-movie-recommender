@@ -1,6 +1,8 @@
 import os
 import pandas as pd
 from kaggle.api.kaggle_api_extended import KaggleApi
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 import streamlit as st
 
 DATA_DIR = "data"
@@ -9,18 +11,17 @@ def download_dataset():
     if not os.path.exists(DATA_DIR):
         os.makedirs(DATA_DIR)
 
-    # 🔑 Read Kaggle credentials from Streamlit Secrets
+    # Kaggle credentials from Streamlit Secrets
     os.environ["KAGGLE_USERNAME"] = st.secrets["kaggle"]["username"]
     os.environ["KAGGLE_KEY"] = st.secrets["kaggle"]["key"]
 
     api = KaggleApi()
     api.authenticate()
 
-    dataset = "rounakbanik/the-movies-dataset"  # Kaggle dataset slug
+    dataset = "rounakbanik/the-movies-dataset"
     api.dataset_download_files(dataset, path=DATA_DIR, unzip=True)
 
 def load_datasets():
-    # download only if not present
     if not os.path.exists(os.path.join(DATA_DIR, "movies_metadata.csv")):
         download_dataset()
 
@@ -32,6 +33,10 @@ def load_datasets():
 
     return movies, ratings, credits, keywords, links
 
-
-
-
+def build_similarity(movies):
+    # Ensure text features are present (for simplicity, use overview)
+    movies["overview"] = movies["overview"].fillna("")
+    cv = CountVectorizer(stop_words="english")
+    count_matrix = cv.fit_transform(movies["overview"])
+    similarity = cosine_similarity(count_matrix, count_matrix)
+    return similarity
