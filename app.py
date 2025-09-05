@@ -1,16 +1,14 @@
 import streamlit as st
-import pickle
 import pandas as pd
 import requests
-import os
+from movie_loader import load_datasets
 
 # --- Load Data ---
-from movie_loader import load_datasets
 movies, similarity = load_datasets()
 
 # --- Fetch Poster Function ---
 def fetch_poster(movie_id):
-    api_key = st.secrets["TMDB_API_KEY"]   # get your key from Streamlit secrets
+    api_key = st.secrets["TMDB_API_KEY"]   # use secret key
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={api_key}&language=en-US"
     response = requests.get(url)
     data = response.json()
