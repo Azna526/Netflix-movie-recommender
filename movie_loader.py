@@ -1,17 +1,18 @@
 import os
 import pandas as pd
 import streamlit as st
+from kaggle.api.kaggle_api_extended import KaggleApi
 
 @st.cache_data(show_spinner=True)
 def load_datasets():
     """
-    Load dataset from Kaggle (using Streamlit secrets for authentication).
+    Download the Kaggle dataset if not already cached,
+    then load the CSVs into Pandas DataFrames.
     """
-    from kaggle.api.kaggle_api_extended import KaggleApi
-    
     dataset = "rounakbanik/the-movies-dataset"
     data_dir = "data"
 
+    # Create folder if not exists
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
 
@@ -19,10 +20,11 @@ def load_datasets():
     os.environ["KAGGLE_USERNAME"] = st.secrets["kaggle"]["username"]
     os.environ["KAGGLE_KEY"] = st.secrets["kaggle"]["key"]
 
-    # Download only once
+    api = KaggleApi()
+    api.authenticate()
+
+    # Download only if missing
     if not os.path.exists(os.path.join(data_dir, "movies_metadata.csv")):
-        api = KaggleApi()
-        api.authenticate()
         api.dataset_download_files(dataset, path=data_dir, unzip=True)
 
     # Load CSVs
@@ -32,4 +34,3 @@ def load_datasets():
     links = pd.read_csv(os.path.join(data_dir, "links_small.csv"))
 
     return movies, credits, keywords, links
-
