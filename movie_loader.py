@@ -1,42 +1,72 @@
 import os
 import pandas as pd
-from kaggle.api.kaggle_api_extended import KaggleApi
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import pickle
+import requests
+import json
 import streamlit as st
 
-DATA_DIR = "data"
+# --- Paths ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MOVIES_FILE = os.path.join(BASE_DIR, "movies_metadata.csv")
+SIMILARITY_FILE = os.path.join(BASE_DIR, "similarity.pkl")
+POSTERS_CACHE = os.path.join(BASE_DIR, "posters_cache.json")
 
-def download_dataset():
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR)
+# --- TMDB API ---
+TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
 
-    # Kaggle credentials from Streamlit Secrets
-    os.environ["KAGGLE_USERNAME"] = st.secrets["kaggle"]["username"]
-    os.environ["KAGGLE_KEY"] = st.secrets["kaggle"]["key"]
+def fetch_poster(movie_id):
+    """Fetch poster URL from TMDB API"""
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        poster_path = data.get("poster_path")
+        if poster_path:
+            return f"https://image.tmdb.org/t/p/w500{poster_path}"
+    return None
 
-    api = KaggleApi()
-    api.authenticate()
+def load_posters_cache():
+    """Load cached poster URLs if available"""
+    if os.path.exists(POSTERS_CACHE):
+        with open(POSTERS_CACHE, "r") as f:
+            return json.load(f)
+    return {}
 
-    dataset = "rounakbanik/the-movies-dataset"
-    api.dataset_download_files(dataset, path=DATA_DIR, unzip=True)
+def save_posters_cache(cache):
+    """Save poster URLs cache to file"""
+    with open(POSTERS_CACHE, "w") as f:
+        json.dump(cache, f)
 
 def load_datasets():
-    if not os.path.exists(os.path.join(DATA_DIR, "movies_metadata.csv")):
-        download_dataset()
+    """Load movies, similarity matrix, and poster URLs"""
+    # Movies
+    movies = pd.read_csv(MOVIES_FILE, low_memory=False)
 
-    movies = pd.read_csv(os.path.join(DATA_DIR, "movies_metadata.csv"), low_memory=False)
-    ratings = pd.read_csv(os.path.join(DATA_DIR, "ratings_small.csv"))
-    credits = pd.read_csv(os.path.join(DATA_DIR, "credits.csv"))
-    keywords = pd.read_csv(os.path.join(DATA_DIR, "keywords.csv"))
-    links = pd.read_csv(os.path.join(DATA_DIR, "links_small.csv"))
+    # Similarity
+    with open(SIMILARITY_FILE, "rb") as f:
+        similarity = pickle.load(f)
 
-    return movies, ratings, credits, keywords, links
+    # Posters cache
+    posters_cache = load_posters_cache()
 
-def build_similarity(movies):
-    # Ensure text features are present (for simplicity, use overview)
-    movies["overview"] = movies["overview"].fillna("")
-    cv = CountVectorizer(stop_words="english")
-    count_matrix = cv.fit_transform(movies["overview"])
-    similarity = cosine_similarity(count_matrix, count_matrix)
-    return similarity
+    # Ensure poster URLs for all movies
+    if "id" in movies.columns:
+        for _, row in movies.iterrows():
+            movie_id = str(row["id"])
+            if movie_id not in posters_cache:
+                poster_url = fetch_poster(movie_id)
+                if poster_url:
+                    posters_cache[movie_id] = poster_url
+        save_posters_cache(posters_cache)
+
+    print("✅ Datasets loaded")
+    print("Movies:", movies.shape)
+    print("Similarity:", similarity.shape)
+    print("Posters cached:", len(posters_cache))
+
+    return movies, similarity, posters_cache
+
+
+if __name__ == "__main__":
+    movies, similarity, posters = load_datasets()
+    print("Sample poster:", list(posters.items())[:5])
