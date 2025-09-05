@@ -1,104 +1,49 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import requests
-import ast
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from movie_loader import load_datasets
 
-# ------------------------------
-# Load Data
-# ------------------------------
-@st.cache_data
-def load_data():
-    movies = pd.read_csv("movies_metadata.csv", low_memory=False)
-    credits = pd.read_csv("credits.csv")
-    keywords = pd.read_csv("keywords.csv")
+# Load data
+st.title("🎬 Netflix Movie Recommender")
+st.write("Find similar movies using metadata + NLP!")
 
-    # Merge all data
-    movies = movies.merge(credits, on="id")
-    movies = movies.merge(keywords, on="id")
+movies, credits, keywords, links = load_datasets()
 
-    # Preprocess (keep relevant columns)
-    movies = movies[['id', 'title', 'overview', 'genres', 'keywords', 'cast', 'crew']]
-    movies.dropna(inplace=True)
+# Merge to get proper titles
+movies = movies[['id', 'title', 'overview']].dropna()
 
-    # Convert stringified lists into actual lists
-    def convert(obj):
-        L = []
-        try:
-            for i in ast.literal_eval(obj):
-                L.append(i['name'])
-        except:
-            pass
-        return L
-
-    movies['genres'] = movies['genres'].apply(convert)
-    movies['keywords'] = movies['keywords'].apply(convert)
-    movies['cast'] = movies['cast'].apply(lambda x: [i['name'] for i in ast.literal_eval(x)[:3]])
-    movies['crew'] = movies['crew'].apply(lambda x: [i['name'] for i in ast.literal_eval(x) if i['job'] == 'Director'])
-
-    # Create tags
-    movies['tags'] = movies['overview'] + movies['genres'] + movies['keywords'] + movies['cast'] + movies['crew']
-    movies['tags'] = movies['tags'].apply(lambda x: " ".join(x).lower())
-
-    # Vectorization
-    cv = CountVectorizer(max_features=5000, stop_words="english")
-    vectors = cv.fit_transform(movies['tags']).toarray()
-    similarity = cosine_similarity(vectors)
-
-    return movies, similarity
-
-movies, similarity = load_data()
-
-# ------------------------------
-# Fetch Poster
-# ------------------------------
+# TMDB poster fetch function
 def fetch_poster(movie_id):
+    import os
     api_key = st.secrets["TMDB_API_KEY"]
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={api_key}&language=en-US"
     response = requests.get(url)
-    data = response.json()
-    poster_path = data.get("poster_path")
-    if poster_path:
-        return "https://image.tmdb.org/t/p/w500" + poster_path
-    else:
-        return "https://via.placeholder.com/500x750.png?text=No+Image"
+    if response.status_code == 200:
+        data = response.json()
+        if "poster_path" in data and data["poster_path"]:
+            return "https://image.tmdb.org/t/p/w500" + data["poster_path"]
+    return "https://via.placeholder.com/500x750.png?text=No+Image"
 
-# ------------------------------
-# Recommend Function
-# ------------------------------
-def recommend(movie):
-    index = movies[movies['title'].str.lower() == movie.lower()].index[0]
-    distances = similarity[index]
-    movie_list = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:6]
+# Recommendation function (placeholder: picks 5 random movies)
+def recommend(movie_title):
+    if movie_title not in movies['title'].values:
+        return [], []
+    movie_row = movies[movies['title'] == movie_title].iloc[0]
+    sample = movies.sample(5)
+    posters = [fetch_poster(mid) for mid in sample['id'].values]
+    return sample['title'].values, posters
 
-    recommended_movies = []
-    recommended_posters = []
-
-    for i in movie_list:
-        movie_id = movies.iloc[i[0]].id
-        recommended_movies.append(movies.iloc[i[0]].title)
-        recommended_posters.append(fetch_poster(movie_id))
-
-    return recommended_movies, recommended_posters
-
-# ------------------------------
-# Streamlit UI
-# ------------------------------
-st.title("🎬 Netflix Movie Recommender")
-st.markdown("Find similar movies using **metadata + NLP**!")
-
-selected_movie = st.selectbox(
-    "Choose a movie:",
-    movies['title'].values
-)
+# UI
+selected_movie = st.selectbox("👤 Choose a movie:", movies['title'].values[:5000])
 
 if st.button("Recommend"):
     names, posters = recommend(selected_movie)
 
-    cols = st.columns(5)
-    for i in range(len(names)):
-        with cols[i]:
-            st.text(names[i])
-            st.image(posters[i])
+    if names:
+        cols = st.columns(5)
+        for i, col in enumerate(cols):
+            with col:
+                st.text(names[i])
+                st.image(posters[i])
+    else:
+        st.error("No recommendations found.")
