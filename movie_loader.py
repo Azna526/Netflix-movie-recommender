@@ -8,11 +8,14 @@ import streamlit as st
 
 @st.cache_data
 def load_datasets():
-    # Authenticate Kaggle
+    # ✅ Get Kaggle credentials from Streamlit secrets
+    os.environ["KAGGLE_USERNAME"] = st.secrets["kaggle"]["username"]
+    os.environ["KAGGLE_KEY"] = st.secrets["kaggle"]["key"]
+
     api = KaggleApi()
     api.authenticate()
 
-    # Download dataset if not already present
+    # ✅ Download dataset if not already present
     if not os.path.exists("tmdb_5000_movies.csv") or not os.path.exists("tmdb_5000_credits.csv"):
         api.dataset_download_files('tmdb/tmdb-movie-metadata', path='.', unzip=True)
 
@@ -22,7 +25,7 @@ def load_datasets():
     # Merge datasets
     movies = movies.merge(credits, on='title')
 
-    # Helper functions
+    # Functions to extract data
     def convert(obj):
         try:
             L = []
@@ -48,7 +51,13 @@ def load_datasets():
     movies['crew'] = movies['crew'].apply(fetch_director)
 
     # Create tags column
-    movies['tags'] = movies['overview'].fillna('') + " " + movies['genres'].astype(str) + " " + movies['keywords'].astype(str) + " " + movies['cast'].astype(str) + " " + movies['crew'].astype(str)
+    movies['tags'] = (
+        movies['overview'].fillna('') + " " +
+        movies['genres'].astype(str) + " " +
+        movies['keywords'].astype(str) + " " +
+        movies['cast'].astype(str) + " " +
+        movies['crew'].astype(str)
+    )
 
     # Feature extraction
     cv = CountVectorizer(max_features=5000, stop_words='english')
@@ -58,5 +67,3 @@ def load_datasets():
     similarity = cosine_similarity(vectors)
 
     return movies, similarity
-
-
