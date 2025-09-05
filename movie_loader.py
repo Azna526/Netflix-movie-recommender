@@ -1,18 +1,30 @@
-import streamlit as st
+import os
 import pandas as pd
-from movie_loader import load_datasets
+from kaggle.api.kaggle_api_extended import KaggleApi
 
-st.title("🎬 Netflix Movie Recommender")
+DATA_DIR = "data"
 
-# Load data
-with st.spinner("Loading dataset from Kaggle..."):
-    movies, ratings, credits, keywords, links = load_datasets()
+def download_dataset():
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
 
-st.success("✅ Dataset loaded successfully!")
+    api = KaggleApi()
+    api.authenticate()  # needs kaggle.json secret
 
-st.write("Movies dataset shape:", movies.shape)
-st.write("Ratings dataset shape:", ratings.shape)
+    dataset = "rounakbanik/the-movies-dataset"
+    api.dataset_download_files(dataset, path=DATA_DIR, unzip=True)
 
-# (your recommendation logic here)
+def load_datasets():
+    if not os.path.exists(os.path.join(DATA_DIR, "movies_metadata.csv")):
+        download_dataset()
+
+    movies = pd.read_csv(os.path.join(DATA_DIR, "movies_metadata.csv"), low_memory=False)
+    ratings = pd.read_csv(os.path.join(DATA_DIR, "ratings_small.csv"))
+    credits = pd.read_csv(os.path.join(DATA_DIR, "credits.csv"))
+    keywords = pd.read_csv(os.path.join(DATA_DIR, "keywords.csv"))
+    links = pd.read_csv(os.path.join(DATA_DIR, "links_small.csv"))
+
+    return movies, ratings, credits, keywords, links
+
 
 
