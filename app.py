@@ -4,16 +4,15 @@ import pandas as pd
 import os
 import requests
 
-# --- API Key ---
-TMDB_API_KEY = "0d309fbe7061ac46435369d2349288ba"   # <-- Replace with your API key
-
 # --- Load Data ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MOVIES_FILE = os.path.join(BASE_DIR, "movies_metadata.csv")
 SIM_FILE = os.path.join(BASE_DIR, "similarity.pkl")
 
+# Load movies
 movies = pd.read_csv(MOVIES_FILE, low_memory=False)
 
+# Ensure we have a title column
 if "original_title" in movies.columns:
     title_col = "original_title"
 elif "title" in movies.columns:
@@ -22,18 +21,27 @@ else:
     st.error("No title column found in movies dataset!")
     st.stop()
 
-with open(SIM_FILE, "rb") as f:
-    similarity = pickle.load(f)
+# Load similarity matrix
+if os.path.exists(SIM_FILE):
+    with open(SIM_FILE, "rb") as f:
+        similarity = pickle.load(f)
+else:
+    st.error("similarity.pkl not found! Run the notebook first to generate it.")
+    st.stop()
 
-# --- Fetch Poster from TMDB ---
-def fetch_poster(movie_title):
-    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={movie_title}"
-    response = requests.get(url).json()
-    if response["results"]:
-        poster_path = response["results"][0].get("poster_path")
+# --- TMDB API ---
+TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
+
+def fetch_poster(movie_id):
+    """Fetch poster from TMDB API using movie_id"""
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        poster_path = data.get("poster_path")
         if poster_path:
-            return "https://image.tmdb.org/t/p/w500" + poster_path
-    return None
+            return f"https://image.tmdb.org/t/p/w500{poster_path}"
+    return "https://via.placeholder.com/300x450?text=No+Image"
 
 # --- Recommend Function ---
 def recommend(movie, n=5):
@@ -46,24 +54,34 @@ def recommend(movie, n=5):
     distances = list(enumerate(similarity[idx]))
     distances = sorted(distances, key=lambda x: x[1], reverse=True)[1:n+1]
     rec_idxs = [i for i, _ in distances]
-    rec_movies = movies.loc[rec_idxs, [title_col, "release_date", "vote_average"]]
 
-    rec_movies["poster"] = rec_movies[title_col].apply(fetch_poster)
-    return rec_movies
+    recs = []
+    for i in rec_idxs:
+        movie_id = movies.loc[i, "id"] if "id" in movies.columns else None
+        poster = fetch_poster(movie_id) if movie_id is not None else None
+        recs.append({
+            "title": movies.loc[i, title_col],
+            "release_date": movies.loc[i].get("release_date", "N/A"),
+            "vote_average": movies.loc[i].get("vote_average", "N/A"),
+            "poster": poster
+        })
+    return recs
 
 # --- Streamlit UI ---
-st.title("🎬 Netflix Movie Recommender with Posters")
+st.title("🎬 Movie Recommender System with Posters")
 
 movie_list = movies[title_col].dropna().unique()
 selected_movie = st.selectbox("Choose a movie:", movie_list)
 
 if st.button("Recommend"):
     recommendations = recommend(selected_movie, 5)
-    if not recommendations.empty:
+    if recommendations:
         st.write("### Recommended Movies:")
-        for _, row in recommendations.iterrows():
-            st.subheader(f"{row[title_col]} ({row['release_date'][:4]}) ⭐ {row['vote_average']}")
-            if row["poster"]:
-                st.image(row["poster"], width=150)
+        cols = st.columns(5)
+        for i, rec in enumerate(recommendations):
+            with cols[i]:
+                st.image(rec["poster"], use_column_width=True)
+                st.caption(f"**{rec['title']}** ({rec['release_date']}) ⭐ {rec['vote_average']}")
     else:
         st.warning("No recommendations found. Check similarity alignment.")
+
