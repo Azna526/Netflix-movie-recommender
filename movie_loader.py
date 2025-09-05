@@ -1,42 +1,30 @@
-import pandas as pd
-import numpy as np
 import os
-import pickle
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import kaggle
+import pandas as pd
+import streamlit as st
 
-DATA_DIR = "data"  # make sure your pickle/csv files are inside /data
-
+@st.cache_data(show_spinner=True)
 def load_datasets():
     """
-    Load movies dataset.
-    Returns a DataFrame with at least 'movie_id' and 'title' columns.
+    Download dataset from Kaggle (if not already cached locally),
+    then load the CSVs into Pandas DataFrames.
     """
-    movies_path = os.path.join(DATA_DIR, "movies.pkl")
+    dataset = "rounakbanik/the-movies-dataset"
+    data_dir = "data"
 
-    if os.path.exists(movies_path):
-        movies = pd.read_pickle(movies_path)
-    else:
-        raise FileNotFoundError(f"{movies_path} not found. Upload it to your repo under /data")
+    # Create data dir if not exists
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
 
-    return movies
+    # Download only once
+    if not os.path.exists(os.path.join(data_dir, "movies_metadata.csv")):
+        kaggle.api.authenticate()
+        kaggle.api.dataset_download_files(dataset, path=data_dir, unzip=True)
 
+    # Load CSVs
+    movies = pd.read_csv(os.path.join(data_dir, "movies_metadata.csv"), low_memory=False)
+    credits = pd.read_csv(os.path.join(data_dir, "credits.csv"))
+    keywords = pd.read_csv(os.path.join(data_dir, "keywords.csv"))
+    links = pd.read_csv(os.path.join(data_dir, "links_small.csv"))
 
-def build_similarity(movies):
-    """
-    Build similarity matrix from movie metadata (tags).
-    Returns a cosine similarity matrix.
-    """
-    if "tags" not in movies.columns:
-        raise ValueError("Movies dataset must contain a 'tags' column for similarity calculation")
-
-    cv = CountVectorizer(max_features=5000, stop_words="english")
-    vectors = cv.fit_transform(movies["tags"]).toarray()
-    similarity = cosine_similarity(vectors)
-
-    # Optional: save for later use
-    sim_path = os.path.join(DATA_DIR, "similarity.pkl")
-    with open(sim_path, "wb") as f:
-        pickle.dump(similarity, f)
-
-    return similarity
+    return movies, credits, keywords, links
