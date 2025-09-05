@@ -1,72 +1,62 @@
 import os
 import pandas as pd
-import pickle
-import requests
-import json
+from kaggle.api.kaggle_api_extended import KaggleApi
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import ast
 import streamlit as st
 
-# --- Paths ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MOVIES_FILE = os.path.join(BASE_DIR, "movies_metadata.csv")
-SIMILARITY_FILE = os.path.join(BASE_DIR, "similarity.pkl")
-POSTERS_CACHE = os.path.join(BASE_DIR, "posters_cache.json")
-
-# --- TMDB API ---
-TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
-
-def fetch_poster(movie_id):
-    """Fetch poster URL from TMDB API"""
-    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        poster_path = data.get("poster_path")
-        if poster_path:
-            return f"https://image.tmdb.org/t/p/w500{poster_path}"
-    return None
-
-def load_posters_cache():
-    """Load cached poster URLs if available"""
-    if os.path.exists(POSTERS_CACHE):
-        with open(POSTERS_CACHE, "r") as f:
-            return json.load(f)
-    return {}
-
-def save_posters_cache(cache):
-    """Save poster URLs cache to file"""
-    with open(POSTERS_CACHE, "w") as f:
-        json.dump(cache, f)
-
+@st.cache_data
 def load_datasets():
-    """Load movies, similarity matrix, and poster URLs"""
-    # Movies
-    movies = pd.read_csv(MOVIES_FILE, low_memory=False)
+    # Authenticate Kaggle
+    api = KaggleApi()
+    api.authenticate()
 
-    # Similarity
-    with open(SIMILARITY_FILE, "rb") as f:
-        similarity = pickle.load(f)
+    # Download dataset if not already present
+    if not os.path.exists("tmdb_5000_movies.csv") or not os.path.exists("tmdb_5000_credits.csv"):
+        api.dataset_download_files('tmdb/tmdb-movie-metadata', path='.', unzip=True)
 
-    # Posters cache
-    posters_cache = load_posters_cache()
+    movies = pd.read_csv("tmdb_5000_movies.csv")
+    credits = pd.read_csv("tmdb_5000_credits.csv")
 
-    # Ensure poster URLs for all movies
-    if "id" in movies.columns:
-        for _, row in movies.iterrows():
-            movie_id = str(row["id"])
-            if movie_id not in posters_cache:
-                poster_url = fetch_poster(movie_id)
-                if poster_url:
-                    posters_cache[movie_id] = poster_url
-        save_posters_cache(posters_cache)
+    # Merge datasets
+    movies = movies.merge(credits, on='title')
 
-    print("✅ Datasets loaded")
-    print("Movies:", movies.shape)
-    print("Similarity:", similarity.shape)
-    print("Posters cached:", len(posters_cache))
+    # Helper functions
+    def convert(obj):
+        try:
+            L = []
+            for i in ast.literal_eval(obj):
+                L.append(i['name'])
+            return L
+        except:
+            return []
 
-    return movies, similarity, posters_cache
+    def fetch_director(obj):
+        try:
+            L = []
+            for i in ast.literal_eval(obj):
+                if i['job'] == 'Director':
+                    L.append(i['name'])
+            return L
+        except:
+            return []
+
+    movies['genres'] = movies['genres'].apply(convert)
+    movies['keywords'] = movies['keywords'].apply(convert)
+    movies['cast'] = movies['cast'].apply(lambda x: convert(x)[:3])
+    movies['crew'] = movies['crew'].apply(fetch_director)
+
+    # Create tags column
+    movies['tags'] = movies['overview'].fillna('') + " " + movies['genres'].astype(str) + " " + movies['keywords'].astype(str) + " " + movies['cast'].astype(str) + " " + movies['crew'].astype(str)
+
+    # Feature extraction
+    cv = CountVectorizer(max_features=5000, stop_words='english')
+    vectors = cv.fit_transform(movies['tags']).toarray()
+
+    # Similarity matrix
+    similarity = cosine_similarity(vectors)
+
+    return movies, similarity
 
 
-if __name__ == "__main__":
-    movies, similarity, posters = load_datasets()
-    print("Sample poster:", list(posters.items())[:5])
