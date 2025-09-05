@@ -1,32 +1,41 @@
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import linear_kernel
+from sklearn.metrics.pairwise import cosine_similarity
 
-def load_movies():
-    # Load a smaller sample dataset
-    df = pd.read_csv("movies_metadata_small.csv", low_memory=False)
+def load_datasets():
+    # Load dataset
+    movies = pd.read_csv("movies_metadata.csv", low_memory=False)
 
-    # Keep only useful columns
-    df = df[['title', 'overview']].dropna()
+    # Make sure we only keep valid titles
+    movies = movies[['title', 'overview']].dropna()
 
-    return df
+    # --- Build TF-IDF model for overviews ---
+    tfidf = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf.fit_transform(movies['overview'])
 
-def build_text_model(movies_df):
-    # Use TF-IDF on movie overviews
-    tfidf = TfidfVectorizer(stop_words="english")
-    tfidf_matrix = tfidf.fit_transform(movies_df["overview"])
-    cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
-    return cosine_sim
+    # --- Compute cosine similarity matrix ---
+    similarity = cosine_similarity(tfidf_matrix, tfidf_matrix)
 
-def similar_by_title(title, movies_df, cosine_sim):
-    indices = pd.Series(movies_df.index, index=movies_df['title']).drop_duplicates()
+    # ✅ Return only 2 values
+    return movies, similarity
 
-    if title not in indices:
+
+def build_text_model():
+    """Optional helper if you want to expose TF-IDF + similarity separately"""
+    movies, similarity = load_datasets()
+    return movies, similarity
+
+
+def similar_by_title(title, movies, similarity, top_n=5):
+    """Find top_n similar movies by title."""
+    if title not in movies['title'].values:
         return []
 
-    idx = indices[title]
-    sim_scores = list(enumerate(cosine_sim[idx]))
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    sim_scores = sim_scores[1:6]  # top 5
+    idx = movies[movies['title'] == title].index[0]
+    sim_scores = list(enumerate(similarity[idx]))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:top_n+1]
     movie_indices = [i[0] for i in sim_scores]
-    return movies_df['title'].iloc[movie_indices].tolist()
+
+    return movies.iloc[movie_indices]['title'].tolist()
+
+
