@@ -4,4 +4,4 @@ scikit-learn
 nltk
 streamlit
 kaggle
-
+requests
