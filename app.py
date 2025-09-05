@@ -1,27 +1,25 @@
 import streamlit as st
-from movie_loader import load_movies, build_text_model, similar_by_title
+from movie_loader import load_datasets, similar_by_title
 
-st.set_page_config(page_title="Netflix Movie Recommender", page_icon="🎬")
+# --- Load Data ---
+st.set_page_config(page_title="Netflix Movie Recommender", layout="centered")
 
-st.title("🎬 Netflix Movie Recommender")
-st.write("Find similar movies using metadata + NLP (no API required).")
+st.title("🍿 Netflix Movie Recommender")
+st.write("Find similar movies using metadata + NLP!")
 
-@st.cache_data
-def load():
-    movies = load_movies()
-    cosine_sim = build_text_model(movies)
-    return movies, cosine_sim
+# Load movies + similarity
+movies, similarity = load_datasets()
 
-movies, cosine_sim = load()
-
-movie_list = movies["title"].tolist()
-selected_movie = st.selectbox("🎥 Choose a movie:", movie_list)
+# --- Movie selection ---
+movie_list = movies['title'].values
+selected_movie = st.selectbox("🎬 Choose a movie:", movie_list)
 
 if st.button("Recommend"):
-    recommendations = similar_by_title(selected_movie, movies, cosine_sim)
+    recommendations = similar_by_title(selected_movie, movies, similarity, top_n=5)
+
     if recommendations:
-        st.subheader("Recommended Movies:")
-        for r in recommendations:
-            st.write("- ", r)
+        st.subheader("✨ Recommended Movies:")
+        for rec in recommendations:
+            st.write(f"- {rec}")
     else:
-        st.error("No recommendations found.")
+        st.error("❌ Could not find recommendations. Try another movie.")
