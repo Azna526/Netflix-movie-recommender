@@ -1,54 +1,48 @@
 import streamlit as st
-import pickle
-import pandas as pd
+from movie_loader import load_datasets
 import requests
+import os
 
 # Load data
-movies = pickle.load(open('movies.pkl', 'rb'))
-similarity = pickle.load(open('similarity.pkl', 'rb'))
-
 st.title("🎬 Netflix Movie Recommender")
+st.write("Find similar movies using metadata + NLP!")
 
-# TMDB API Key from Streamlit secrets
-TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
+# Get movies and similarity from loader
+movies, similarity = load_datasets()
 
-# Function to fetch poster from TMDB
+# Dropdown for movie selection
+movie_list = movies['title'].values
+selected_movie = st.selectbox("👤 Choose a movie:", movie_list)
+
+# TMDB API
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+
 def fetch_poster(movie_id):
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
     response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        poster_path = data.get('poster_path')
-        if poster_path:
-            return "https://image.tmdb.org/t/p/w500" + poster_path
-    return "https://via.placeholder.com/300x450.png?text=No+Poster"
+    data = response.json()
+    if "poster_path" in data and data["poster_path"]:
+        return "https://image.tmdb.org/t/p/w500" + data["poster_path"]
+    else:
+        return "https://via.placeholder.com/500x750.png?text=No+Poster"
 
-# Recommendation function
 def recommend(movie):
-    movie_index = movies[movies['original_title'] == movie].index[0]
-    distances = similarity[movie_index]
-    movies_list = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:6]
-
+    index = movies[movies['title'] == movie].index[0]
+    distances = sorted(list(enumerate(similarity[index])), reverse=True, key=lambda x: x[1])
     recommended_movies = []
     recommended_posters = []
 
-    for i in movies_list:
+    for i in distances[1:6]:  # Top 5 recommendations
         movie_id = movies.iloc[i[0]].id
-        recommended_movies.append(movies.iloc[i[0]].original_title)
+        recommended_movies.append(movies.iloc[i[0]].title)
         recommended_posters.append(fetch_poster(movie_id))
 
     return recommended_movies, recommended_posters
 
-# UI
-selected_movie_name = st.selectbox("🎥 Choose a movie:", movies['original_title'].values)
-
 if st.button("Recommend"):
-    names, posters = recommend(selected_movie_name)
-
+    names, posters = recommend(selected_movie)
     cols = st.columns(5)
-    for idx, col in enumerate(cols):
-        with col:
-            st.text(names[idx])
-            st.image(posters[idx])
-
-
+    for i in range(5):
+        with cols[i]:
+            st.text(names[i])
+            st.image(posters[i])
