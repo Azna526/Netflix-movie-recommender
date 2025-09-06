@@ -72,4 +72,3 @@ def load_similarity():
         load_movies()
         with open(SIMILARITY_FILE, "rb") as f:
             return pickle.load(f)
-
