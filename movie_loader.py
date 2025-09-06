@@ -1,40 +1,40 @@
 import os
 import pandas as pd
-import pickle
 import requests
+import pickle
 
-# Your TMDB key
+# Your TMDB API key
 TMDB_API_KEY = "0d309fbe7061ac46435369d2349288ba"
 
 # ===============================
 # Load Movies
 # ===============================
 def load_movies():
-    dataset_path = "movies_metadata.csv"
-
-    # If file not present, download via Kaggle API
+    dataset_path = "processed_movies.csv"   # preprocessed smaller dataset
     if not os.path.exists(dataset_path):
-        import kaggle
-        kaggle.api.authenticate()
-        kaggle.api.dataset_download_files(
-            "rounakbanik/the-movies-dataset",
-            path=".",
-            unzip=True
+        raise FileNotFoundError(
+            f"{dataset_path} not found. Please upload it to your Streamlit app directory."
         )
 
-    movies = pd.read_csv(dataset_path, low_memory=False)
-    movies = movies[['id', 'title']].dropna().drop_duplicates().reset_index(drop=True)
+    movies = pd.read_csv(dataset_path)
     return movies
 
 # ===============================
 # Load Similarity Matrix
 # ===============================
 def load_similarity():
-    with open("similarity.pkl", "rb") as f:
-        return pickle.load(f)
+    sim_path = "similarity.pkl"
+    if not os.path.exists(sim_path):
+        raise FileNotFoundError(
+            f"{sim_path} not found. Please upload it to your Streamlit app directory."
+        )
+
+    with open(sim_path, "rb") as f:
+        similarity = pickle.load(f)
+    return similarity
 
 # ===============================
-# Fetch Poster, Details & Link
+# Fetch Poster & Details
 # ===============================
 def fetch_movie_details(movie_id, api_key=TMDB_API_KEY):
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={api_key}&language=en-US"
@@ -46,25 +46,8 @@ def fetch_movie_details(movie_id, api_key=TMDB_API_KEY):
         rating = data.get("vote_average", "N/A")
         overview = data.get("overview", "No overview available.")
         title = data.get("title", "Unknown Title")
+
         poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ""
-        tmdb_url = f"https://www.themoviedb.org/movie/{movie_id}"
-        return title, poster_url, rating, overview, tmdb_url
+        return title, poster_url, rating, overview
 
-    return "Unknown", "", "N/A", "Details not available.", ""
-
-# ===============================
-# Recommend Movies
-# ===============================
-def recommend(movie_title, movies, similarity, top_n=5):
-    if movie_title not in movies['title'].values:
-        return []
-
-    idx = movies[movies['title'] == movie_title].index[0]
-    distances = list(enumerate(similarity[idx]))
-    similar_movies = sorted(distances, key=lambda x: x[1], reverse=True)[1:top_n+1]
-
-    recommendations = []
-    for i in similar_movies:
-        rec_id = movies.iloc[i[0]]['id']
-        recommendations.append(rec_id)
-    return recommendations
+    return "Unknown", "", "N/A", "Details not available."
