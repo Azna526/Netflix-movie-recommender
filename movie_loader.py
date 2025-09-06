@@ -1,59 +1,52 @@
-import os
+import requests
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MOVIES_FILE = os.path.join(BASE_DIR, "movies_metadata.csv")
+# TMDB API Key
+TMDB_API_KEY = "0d309fbe7061ac46435369d2349288ba"
+TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
+# --- Load Sample Dataset ---
 def load_movies():
-    """Load the movies dataset with required preprocessing."""
-    movies = pd.read_csv(MOVIES_FILE, low_memory=False)
+    # Minimal dataset to start with
+    data = {
+        'movie_id': [603, 157336, 550],  # The Matrix, Interstellar, Fight Club
+        'title': ["The Matrix", "Interstellar", "Fight Club"],
+        'overview': [
+            "A computer hacker learns about the true nature of his reality.",
+            "A team of explorers travel through a wormhole in space.",
+            "An underground club changes the life of an insomniac."
+        ]
+    }
+    return pd.DataFrame(data)
 
-    # Ensure title column
-    if "title" not in movies.columns:
-        raise ValueError("❌ No 'title' column found in movies_metadata.csv")
-
-    # Keep minimal useful columns
-    keep_cols = ["id", "title", "overview", "genres"]
-    movies = movies[[c for c in keep_cols if c in movies.columns]]
-
-    # Fill blanks
-    for col in ["overview", "genres"]:
-        if col in movies.columns:
-            movies[col] = movies[col].fillna("")
-
-    # Tags = overview + genres (lightweight bag of words)
-    movies["tags"] = movies["overview"].astype(str) + " " + movies["genres"].astype(str)
-
-    print("✅ Movies loaded:", movies.shape)
-    return movies
-
-def build_text_model(movies):
-    """Build text similarity model (bag-of-words + cosine similarity)."""
-    cv = CountVectorizer(max_features=5000, stop_words="english")
-    vectors = cv.fit_transform(movies["tags"].astype(str)).toarray()
+# --- Build similarity model ---
+def build_text_model(movies_df):
+    cv = CountVectorizer(max_features=5000, stop_words='english')
+    vectors = cv.fit_transform(movies_df['overview']).toarray()
     similarity = cosine_similarity(vectors)
-
-    print("✅ Similarity matrix shape:", similarity.shape)
-    if similarity.shape[0] != movies.shape[0]:
-        print("⚠️ Shape mismatch between movies and similarity!")
-    else:
-        print("✅ Shapes match correctly 🎉")
     return similarity
 
-def similar_by_title(title, movies, similarity, top_n=5):
-    """Return indices of most similar movies given a title."""
-    matches = movies[movies["title"].str.lower() == title.lower()]
-    if matches.empty:
+# --- Recommend similar movies ---
+def similar_by_title(title, movies, similarity):
+    if title not in movies['title'].values:
         return []
-    idx = matches.index[0]
+    idx = movies[movies['title'] == title].index[0]
     distances = list(enumerate(similarity[idx]))
-    distances = sorted(distances, key=lambda x: x[1], reverse=True)[1:top_n+1]
-    return [i for i, _ in distances]
+    distances = sorted(distances, key=lambda x: x[1], reverse=True)
+    recommendations = []
+    for i in distances[1:6]:  # top 5
+        movie_id = movies.iloc[i[0]].movie_id
+        rec_title = movies.iloc[i[0]].title
+        poster = fetch_poster(movie_id)
+        recommendations.append((rec_title, poster))
+    return recommendations
 
-# Debug run
-if __name__ == "__main__":
-    movies = load_movies()
-    similarity = build_text_model(movies)
-    print("Sanity check → Movies:", movies.shape, "| Similarity:", similarity.shape)
+# --- Fetch poster from TMDb ---
+def fetch_poster(movie_id):
+    url = f"{TMDB_BASE_URL}/movie/{movie_id}?api_key={TMDB_API_KEY}"
+    response = requests.get(url).json()
+    if "poster_path" in response and response["poster_path"]:
+        return f"https://image.tmdb.org/t/p/w500{response['poster_path']}"
+    return "https://via.placeholder.com/300x450?text=No+Image"
