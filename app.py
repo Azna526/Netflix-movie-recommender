@@ -4,9 +4,9 @@ from movie_loader import load_movies, load_similarity, recommend
 # ===============================
 # Streamlit UI
 # ===============================
-st.title("🍿 Netflix Movie Recommender (with TMDb Posters, Ratings & Links)")
+st.title("🍿 Netflix Movie Recommender ")
 
-with st.spinner("Loading movies..."):
+with st.spinner("Loading movies & similarity data..."):
     movies = load_movies()
     similarity = load_similarity()
 
@@ -16,17 +16,22 @@ selected_movie = st.selectbox("Choose a movie:", movie_list)
 
 # Show recommendations when button clicked
 if st.button("Recommend"):
-    recommendations = recommend(selected_movie, movies, similarity, top_n=6)  # 6 movies for grid
+    recommendations = recommend(selected_movie, movies, similarity, top_n=5)
 
-    if not recommendations:
-        st.error("No recommendations found.")
+    if recommendations:
+        for title, poster_url, rating, overview, homepage in recommendations:
+            st.subheader(title)
+
+            if poster_url:
+                st.image(poster_url, width=250)
+
+            st.write(f"⭐ **Rating:** {rating}")
+            st.write("📖 **Overview:**")
+            st.write(overview)
+
+            if homepage:
+                st.markdown(f"[🔗 More Info]({homepage})", unsafe_allow_html=True)
+
+            st.markdown("---")
     else:
-        cols = st.columns(3)  # 3 movies per row
-
-        for idx, (title, poster_url, rating, overview, link) in enumerate(recommendations):
-            with cols[idx % 3]:
-                st.image(poster_url, width=200, caption=title)
-                st.markdown(f"⭐ **{rating}**")
-                st.markdown(f"[🔗 View on TMDb]({link})")
-                with st.expander("📖 Overview"):
-                    st.write(overview)
+        st.warning("❌ No recommendations found. Try another movie!")
