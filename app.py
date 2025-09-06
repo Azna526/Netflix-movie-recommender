@@ -1,37 +1,41 @@
 import streamlit as st
-from movie_loader import load_movies, load_similarity, recommend
+from movie_loader import load_movies, load_similarity, recommend, fetch_movie_details
 
 # ===============================
-# Streamlit UI
+# App Title
 # ===============================
-st.title("🍿 Netflix Movie Recommender ")
+st.title("🍿 Netflix Movie Recommender (with TMDb Posters, Ratings & Links)")
 
-with st.spinner("Loading movies & similarity data..."):
+# ===============================
+# Load Data
+# ===============================
+try:
     movies = load_movies()
-    similarity = load_similarity()
+    similarity = load_similarity(movies)
+except Exception as e:
+    st.error(f"❌ Failed to load data: {e}")
+    st.stop()
 
-# Dropdown to pick a movie
 movie_list = movies['title'].values
-selected_movie = st.selectbox("Choose a movie:", movie_list)
+selected_movie = st.selectbox("Choose a movie you like:", movie_list)
 
-# Show recommendations when button clicked
+# ===============================
+# Recommend Button
+# ===============================
 if st.button("Recommend"):
-    recommendations = recommend(selected_movie, movies, similarity, top_n=5)
+    recommendations = recommend(selected_movie, movies, similarity)
 
     if recommendations:
-        for title, poster_url, rating, overview, homepage in recommendations:
-            st.subheader(title)
+        st.write("### Recommended Movies:")
+        cols = st.columns(5)  # display posters in a row
 
-            if poster_url:
-                st.image(poster_url, width=250)
+        for i, (mid, title) in enumerate(recommendations):
+            title, poster_url, rating, overview, link = fetch_movie_details(mid)
 
-            st.write(f"⭐ **Rating:** {rating}")
-            st.write("📖 **Overview:**")
-            st.write(overview)
-
-            if homepage:
-                st.markdown(f"[🔗 More Info]({homepage})", unsafe_allow_html=True)
-
-            st.markdown("---")
+            with cols[i % 5]:
+                if poster_url:
+                    st.image(poster_url, use_container_width=True)
+                st.markdown(f"**[{title}]({link})**")
+                st.caption(f"⭐ {rating}")
     else:
-        st.warning("❌ No recommendations found. Try another movie!")
+        st.warning("⚠️ No recommendations found.")
