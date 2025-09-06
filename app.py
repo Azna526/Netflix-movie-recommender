@@ -1,13 +1,11 @@
 import streamlit as st
-import pandas as pd
 from movie_loader import load_movies, fetch_movie_details
 
 # ===============================
 # Streamlit UI
 # ===============================
-st.title("🍿 Netflix Movie Recommender (with TMDb Posters & Details)")
+st.title("🍿 Netflix Movie Recommender (with TMDb )")
 
-# Load dataset
 with st.spinner("Loading movies..."):
     movies = load_movies()
 
@@ -21,10 +19,11 @@ if st.button("Recommend"):
     movie_id = movies[movies['title'] == selected_movie]['id'].values[0]
     title, poster_url, rating, overview = fetch_movie_details(movie_id)
 
-    st.subheader(title)   # ✅ Title now visible
+    st.subheader(title)   # ✅ Title
     if poster_url:
         st.image(poster_url, width=300)
 
     st.write(f"⭐ Rating: {rating}")
     st.write("📖 Overview:")
     st.write(overview)
+
