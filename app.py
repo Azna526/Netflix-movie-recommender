@@ -1,5 +1,5 @@
 import streamlit as st
-from movie_loader import load_movies, load_similarity
+from movie_loader import movies, similarity
 import requests
 import numpy as np
 
