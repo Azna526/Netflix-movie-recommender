@@ -1,74 +1,69 @@
 import os
-import pickle
+import json
+import pathlib
 import pandas as pd
-import requests
-import subprocess
 import streamlit as st
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
-# ===============================
-# Load API Keys from Streamlit Secrets
-# ===============================
-KAGGLE_USERNAME = st.secrets["kaggle"]["username"]
-KAGGLE_KEY = st.secrets["kaggle"]["key"]
+# -------------------------------
+# Read secrets
+# -------------------------------
+K_USERNAME = st.secrets["kaggle"]["username"]
+K_KEY = st.secrets["kaggle"]["key"]
+
+# Optional: TMDb key if you use it elsewhere
 TMDB_API_KEY = st.secrets["tmdb"]["api_key"]
 
-os.environ["KAGGLE_USERNAME"] = KAGGLE_USERNAME
-os.environ["KAGGLE_KEY"] = KAGGLE_KEY
+DATASET_SLUG = "rounakbanik/the-movies-dataset"
+CSV_NAME = "movies_metadata.csv"
 
-# ===============================
-# File Paths
-# ===============================
-RAW_FILE = "movies_metadata.csv"
-PROCESSED_FILE = "processed_movies.csv"
-SIMILARITY_FILE = "similarity.pkl"
 
-# ===============================
-# Load Movies Dataset
-# ===============================
+def _ensure_kaggle_credentials():
+    """Write ~/.kaggle/kaggle.json so KaggleApi can authenticate."""
+    cred = {"username": K_USERNAME, "key": K_KEY}
+    cfg_dir = pathlib.Path.home() / ".kaggle"
+    cfg_dir.mkdir(exist_ok=True)
+    cfg_path = cfg_dir / "kaggle.json"
+    with open(cfg_path, "w") as f:
+        json.dump(cred, f)
+    os.chmod(cfg_path, 0o600)  # required by Kaggle
+    os.environ["KAGGLE_CONFIG_DIR"] = str(cfg_dir)
+
+
+def _download_movies_dataset():
+    """Download and unzip the dataset using KaggleApi (no subprocess)."""
+    from kaggle.api.kaggle_api_extended import KaggleApi
+
+    _ensure_kaggle_credentials()
+    api = KaggleApi()
+    api.authenticate()
+    # This produces a zip in the current directory and unzips it
+    api.dataset_download_files(DATASET_SLUG, path=".", unzip=True)
+
+
 def load_movies():
-    # If processed file exists, just load it
-    if os.path.exists(PROCESSED_FILE):
-        return pd.read_csv(PROCESSED_FILE)
+    """
+    Ensure movies_metadata.csv exists, download if needed, then load a clean
+    (id, title) dataframe.
+    """
+    dataset_path = CSV_NAME
 
-    # If not, check raw file
-    if not os.path.exists(RAW_FILE):
-        # Download from Kaggle
-        subprocess.run([
-            "kaggle", "datasets", "download", "-d",
-            "rounakbanik/the-movies-dataset",
-            "-p", ".", "--unzip"
-        ], check=True)
+    if not os.path.exists(dataset_path):
+        try:
+            _download_movies_dataset()
+        except Exception as e:
+            st.error(
+                "Couldn't download from Kaggle. Check that your Kaggle secrets are correct "
+                "and that the dataset is accessible to your account."
+            )
+            # Re-raise so Streamlit logs the traceback
+            raise
 
-    if not os.path.exists(RAW_FILE):
-        raise FileNotFoundError(f"{RAW_FILE} not found even after download.")
+    if not os.path.exists(dataset_path):
+        raise FileNotFoundError(f"{dataset_path} not found after Kaggle download.")
 
-    # Preprocess and save
-    movies = pd.read_csv(RAW_FILE, low_memory=False)
-    movies = movies[['id', 'title', 'overview']].dropna().reset_index(drop=True)
-
-    # Create TF-IDF matrix
-    tfidf = TfidfVectorizer(stop_words="english")
-    tfidf_matrix = tfidf.fit_transform(movies['overview'])
-    similarity = cosine_similarity(tfidf_matrix, tfidf_matrix)
-
-    # Save processed files
-    movies[['id', 'title']].to_csv(PROCESSED_FILE, index=False)
-    with open(SIMILARITY_FILE, "wb") as f:
-        pickle.dump(similarity, f)
-
-    return movies[['id', 'title']]
-
-# ===============================
-# Load Similarity Matrix
-# ===============================
-def load_similarity():
-    if os.path.exists(SIMILARITY_FILE):
-        with open(SIMILARITY_FILE, "rb") as f:
-            return pickle.load(f)
-    else:
-        # Ensure preprocessing happens
-        load_movies()
-        with open(SIMILARITY_FILE, "rb") as f:
-            return pickle.load(f)
+    # Load and clean
+    df = pd.read_csv(dataset_path, low_memory=False, usecols=["id", "title"])
+    df["id"] = pd.to_numeric(df["id"], errors="coerce")
+    df = df.dropna(subset=["id", "title"]).astype({"id": "int64"})
+    df = df.drop_duplicates().reset_index(drop=True)
+    return df
