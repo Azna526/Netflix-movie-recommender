@@ -1,25 +1,30 @@
 import streamlit as st
 import pandas as pd
 from movie_loader import load_movies, fetch_movie_details
-import os
 
-# Load TMDb API key
-TMDB_API_KEY = os.getenv("TMDB_API_KEY", "0d309fbe7061ac46435369d2349288ba")  # replace with secret if needed
+# ===============================
+# Streamlit UI
+# ===============================
+st.title("🍿 Netflix Movie Recommender (with TMDb Posters & Details)")
 
-st.title("🍿 Netflix Style Movie Recommender ")
+# Load dataset
+with st.spinner("Loading movies..."):
+    movies = load_movies()
 
-# Load movies
-movies = load_movies()
 movie_list = movies['title'].values
+selected_movie = st.selectbox("Choose a movie:", movie_list)
 
-# Dropdown
-selected_movie_name = st.selectbox("Choose a movie:", movie_list)
-
-# Find movie_id from selected name
+# ===============================
+# Show Movie Details
+# ===============================
 if st.button("Recommend"):
-    movie_id = movies[movies['title'] == selected_movie_name]['id'].values[0]
-    poster, rating, overview = fetch_movie_details(movie_id, TMDB_API_KEY)
+    movie_id = movies[movies['title'] == selected_movie]['id'].values[0]
+    title, poster_url, rating, overview = fetch_movie_details(movie_id)
 
-    st.image(poster, width=300)
-    st.markdown(f"**Rating:** ⭐ {rating}")
-    st.markdown(f"**Overview:** {overview}")
+    st.subheader(title)   # ✅ Title now visible
+    if poster_url:
+        st.image(poster_url, width=300)
+
+    st.write(f"⭐ Rating: {rating}")
+    st.write("📖 Overview:")
+    st.write(overview)
