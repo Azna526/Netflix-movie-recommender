@@ -1,30 +1,24 @@
-# app.py
-import streamlit as st
-from movie_loader import load_movies, fetch_movie_details
+import pandas as pd
+import requests
 
-st.set_page_config(page_title="Dynamic Movie Recommender", layout="centered")
-st.title("🎬 Dynamic Movie Recommender (TMDb API)")
+TMDB_API_KEY = "0d309fbe7061ac46435369d2349288ba"
 
-with st.spinner("Loading movies..."):
-    try:
-        movies = load_movies()
-    except Exception as e:
-        st.error(f"Failed to load movies_metadata.csv: {e}")
-        st.stop()
+def load_movies():
+    movies = pd.read_csv("movies_metadata.csv", low_memory=False)
+    movies = movies[['id', 'title']].dropna().drop_duplicates().reset_index(drop=True)
+    return movies
 
-movie_list = movies['title'].tolist()
-selected_movie = st.selectbox("Choose a movie:", movie_list)
+def fetch_movie_details(movie_id, api_key=TMDB_API_KEY):
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={api_key}&language=en-US"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        poster_path = data.get("poster_path", "")
+        rating = data.get("vote_average", "N/A")
+        overview = data.get("overview", "No overview available.")
+        title = data.get("title", "Unknown Title")
+        poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ""
+        movie_url = f"https://www.themoviedb.org/movie/{movie_id}"  # 🔗 direct TMDb link
+        return title, poster_url, rating, overview, movie_url
+    return "Unknown", "", "N/A", "Details not available.", ""
 
-if st.button("Recommend"):
-    movie_row = movies[movies['title'] == selected_movie]
-    if movie_row.empty:
-        st.error("Selected movie not found in dataset.")
-    else:
-        movie_id = movie_row['id'].values[0]
-        title, poster_url, rating, overview = fetch_movie_details(movie_id)
-        st.subheader(title)
-        if poster_url:
-            st.image(poster_url, width=300)
-        st.write(f"⭐ Rating: {rating}")
-        st.write("📖 Overview:")
-        st.write(overview)
