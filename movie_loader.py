@@ -1,69 +1,92 @@
 import os
-import json
-import pathlib
+import pickle
 import pandas as pd
+import requests
+import subprocess
 import streamlit as st
 
-# -------------------------------
-# Read secrets
-# -------------------------------
-K_USERNAME = st.secrets["kaggle"]["username"]
-K_KEY = st.secrets["kaggle"]["key"]
-
-# Optional: TMDb key if you use it elsewhere
+# ===============================
+# Load API Keys from Streamlit Secrets
+# ===============================
+KAGGLE_USERNAME = st.secrets["kaggle"]["username"]
+KAGGLE_KEY = st.secrets["kaggle"]["key"]
 TMDB_API_KEY = st.secrets["tmdb"]["api_key"]
 
-DATASET_SLUG = "rounakbanik/the-movies-dataset"
-CSV_NAME = "movies_metadata.csv"
+os.environ["KAGGLE_USERNAME"] = KAGGLE_USERNAME
+os.environ["KAGGLE_KEY"] = KAGGLE_KEY
 
-
-def _ensure_kaggle_credentials():
-    """Write ~/.kaggle/kaggle.json so KaggleApi can authenticate."""
-    cred = {"username": K_USERNAME, "key": K_KEY}
-    cfg_dir = pathlib.Path.home() / ".kaggle"
-    cfg_dir.mkdir(exist_ok=True)
-    cfg_path = cfg_dir / "kaggle.json"
-    with open(cfg_path, "w") as f:
-        json.dump(cred, f)
-    os.chmod(cfg_path, 0o600)  # required by Kaggle
-    os.environ["KAGGLE_CONFIG_DIR"] = str(cfg_dir)
-
-
-def _download_movies_dataset():
-    """Download and unzip the dataset using KaggleApi (no subprocess)."""
-    from kaggle.api.kaggle_api_extended import KaggleApi
-
-    _ensure_kaggle_credentials()
-    api = KaggleApi()
-    api.authenticate()
-    # This produces a zip in the current directory and unzips it
-    api.dataset_download_files(DATASET_SLUG, path=".", unzip=True)
-
-
+# ===============================
+# Load Movies Dataset
+# ===============================
 def load_movies():
-    """
-    Ensure movies_metadata.csv exists, download if needed, then load a clean
-    (id, title) dataframe.
-    """
-    dataset_path = CSV_NAME
+    dataset_path = "processed_movies.csv"
 
     if not os.path.exists(dataset_path):
-        try:
-            _download_movies_dataset()
-        except Exception as e:
-            st.error(
-                "Couldn't download from Kaggle. Check that your Kaggle secrets are correct "
-                "and that the dataset is accessible to your account."
-            )
-            # Re-raise so Streamlit logs the traceback
-            raise
+        # Download from Kaggle if missing
+        subprocess.run([
+            "kaggle", "datasets", "download", "-d",
+            "rounakbanik/the-movies-dataset",
+            "-p", ".", "--unzip"
+        ], check=True)
 
-    if not os.path.exists(dataset_path):
-        raise FileNotFoundError(f"{dataset_path} not found after Kaggle download.")
+        if not os.path.exists(dataset_path):
+            raise FileNotFoundError(f"{dataset_path} not found. Please generate it first.")
 
-    # Load and clean
-    df = pd.read_csv(dataset_path, low_memory=False, usecols=["id", "title"])
-    df["id"] = pd.to_numeric(df["id"], errors="coerce")
-    df = df.dropna(subset=["id", "title"]).astype({"id": "int64"})
-    df = df.drop_duplicates().reset_index(drop=True)
-    return df
+    movies = pd.read_csv(dataset_path, low_memory=False)
+    return movies
+
+
+# ===============================
+# Load Similarity Matrix
+# ===============================
+def load_similarity():
+    with open("similarity.pkl", "rb") as f:
+        similarity = pickle.load(f)
+    return similarity
+
+
+# ===============================
+# Fetch Poster, Rating & Overview from TMDb
+# ===============================
+def fetch_movie_details(movie_id):
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
+    response = requests.get(url)
+    if response.status_code != 200:
+        return None
+
+    data = response.json()
+    poster_url = f"https://image.tmdb.org/t/p/w500{data['poster_path']}" if data.get("poster_path") else None
+    rating = data.get("vote_average", "N/A")
+    overview = data.get("overview", "No overview available.")
+    homepage = data.get("homepage", None)
+
+    return {
+        "title": data.get("title", "Unknown"),
+        "poster": poster_url,
+        "rating": rating,
+        "overview": overview,
+        "homepage": homepage
+    }
+
+
+# ===============================
+# Recommendation Function
+# ===============================
+def recommend(movie_title, movies, similarity, top_n=5):
+    if movie_title not in movies['title'].values:
+        return []
+
+    idx = movies[movies['title'] == movie_title].index[0]
+    scores = list(enumerate(similarity[idx]))
+    scores = sorted(scores, key=lambda x: x[1], reverse=True)
+
+    recommendations = []
+    for i in scores[1:top_n+1]:
+        movie_id = movies.iloc[i[0]]['id']
+        details = fetch_movie_details(movie_id)
+        if details:
+            recommendations.append(details)
+
+    return recommendations
+
+
