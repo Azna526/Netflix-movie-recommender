@@ -1,63 +1,42 @@
 import os
 import pickle
 import pandas as pd
-import requests
-import streamlit as st
-from kaggle.api.kaggle_api_extended import KaggleApi
-
-# ===============================
-# Load API Keys from Streamlit Secrets
-# ===============================
-os.environ["KAGGLE_USERNAME"] = st.secrets["kaggle"]["username"]
-os.environ["KAGGLE_KEY"] = st.secrets["kaggle"]["key"]
-TMDB_API_KEY = st.secrets["tmdb"]["api_key"]
-
-# Initialize Kaggle API
-api = KaggleApi()
-api.authenticate()
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # ===============================
 # Load Movies Dataset
 # ===============================
-def load_movies():
-    dataset_path = "movies_metadata.csv"
-
-    # If file not present, download via Kaggle API
+def load_movies(dataset_path="movies_metadata.csv"):
     if not os.path.exists(dataset_path):
-        api.dataset_download_files(
-            "rounakbanik/the-movies-dataset",
-            path=".",
-            unzip=True
-        )
+        raise FileNotFoundError(f"{dataset_path} not found. Please upload it to your repo or Kaggle.")
 
     movies = pd.read_csv(dataset_path, low_memory=False)
-    movies = movies[['id', 'title']].dropna().drop_duplicates().reset_index(drop=True)
+    movies = movies[['id', 'title', 'overview']].dropna().drop_duplicates().reset_index(drop=True)
     return movies
 
 # ===============================
-# Load Similarity Matrix
+# Load or Rebuild Similarity Matrix
 # ===============================
-def load_similarity():
-    with open("similarity.pkl", "rb") as f:
-        return pickle.load(f)
+def load_similarity(movies, path="similarity.pkl"):
+    if os.path.exists(path):
+        try:
+            with open(path, "rb") as f:
+                return pickle.load(f)
+        except Exception as e:
+            print(f"⚠️ similarity.pkl is corrupted. Rebuilding... ({e})")
 
-# ===============================
-# Fetch Poster & Details
-# ===============================
-def fetch_movie_details(movie_id, api_key=TMDB_API_KEY):
-    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={api_key}&language=en-US"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        poster_path = data.get("poster_path", "")
-        rating = data.get("vote_average", "N/A")
-        overview = data.get("overview", "No overview available.")
-        title = data.get("title", "Unknown Title")
-        homepage = data.get("homepage", "")
+    # --- Rebuild from movies_metadata.csv ---
+    print("🔄 Building similarity matrix from movie overviews...")
+    tfidf = TfidfVectorizer(stop_words="english")
+    tfidf_matrix = tfidf.fit_transform(movies["overview"])
+    similarity = cosine_similarity(tfidf_matrix, tfidf_matrix)
 
-        poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ""
-        return title, poster_url, rating, overview, homepage
-    return "Unknown", "", "N/A", "Details not available.", ""
+    # Save for future loads
+    with open(path, "wb") as f:
+        pickle.dump(similarity, f)
+
+    return similarity
 
 # ===============================
 # Recommend Movies
@@ -67,13 +46,9 @@ def recommend(movie_title, movies, similarity, top_n=5):
         return []
 
     idx = movies[movies['title'] == movie_title].index[0]
-    distances = list(enumerate(similarity[idx]))
-    distances = sorted(distances, key=lambda x: x[1], reverse=True)[1:top_n+1]
+    sim_scores = list(enumerate(similarity[idx]))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+    sim_scores = sim_scores[1:top_n+1]  # skip itself
 
-    recommendations = []
-    for i in distances:
-        movie_id = movies.iloc[i[0]]['id']
-        details = fetch_movie_details(movie_id)
-        recommendations.append(details)
-
-    return recommendations
+    movie_indices = [i[0] for i in sim_scores]
+    return movies.iloc[movie_indices][['id', 'title']].values.tolist()
