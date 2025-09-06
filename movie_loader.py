@@ -2,8 +2,8 @@ import os
 import pickle
 import pandas as pd
 import requests
-import kaggle
 import streamlit as st
+from kaggle.api.kaggle_api_extended import KaggleApi
 
 # ===============================
 # Load API Keys from Streamlit Secrets
@@ -12,16 +12,19 @@ os.environ["KAGGLE_USERNAME"] = st.secrets["kaggle"]["username"]
 os.environ["KAGGLE_KEY"] = st.secrets["kaggle"]["key"]
 TMDB_API_KEY = st.secrets["tmdb"]["api_key"]
 
+# Initialize Kaggle API
+api = KaggleApi()
+api.authenticate()
+
 # ===============================
 # Load Movies Dataset
 # ===============================
 def load_movies():
     dataset_path = "movies_metadata.csv"
 
-    # If not present, download from Kaggle
+    # If file not present, download via Kaggle API
     if not os.path.exists(dataset_path):
-        kaggle.api.authenticate()
-        kaggle.api.dataset_download_files(
+        api.dataset_download_files(
             "rounakbanik/the-movies-dataset",
             path=".",
             unzip=True
@@ -35,14 +38,11 @@ def load_movies():
 # Load Similarity Matrix
 # ===============================
 def load_similarity():
-    sim_path = "similarity.pkl"
-    if not os.path.exists(sim_path):
-        raise FileNotFoundError(f"{sim_path} not found. Please upload it to your Streamlit app.")
-    with open(sim_path, "rb") as f:
+    with open("similarity.pkl", "rb") as f:
         return pickle.load(f)
 
 # ===============================
-# Fetch Poster & Details from TMDb
+# Fetch Poster & Details
 # ===============================
 def fetch_movie_details(movie_id, api_key=TMDB_API_KEY):
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={api_key}&language=en-US"
@@ -54,6 +54,7 @@ def fetch_movie_details(movie_id, api_key=TMDB_API_KEY):
         overview = data.get("overview", "No overview available.")
         title = data.get("title", "Unknown Title")
         homepage = data.get("homepage", "")
+
         poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ""
         return title, poster_url, rating, overview, homepage
     return "Unknown", "", "N/A", "Details not available.", ""
@@ -61,18 +62,18 @@ def fetch_movie_details(movie_id, api_key=TMDB_API_KEY):
 # ===============================
 # Recommend Movies
 # ===============================
-def recommend(movie, movies, similarity):
-    if movie not in movies['title'].values:
+def recommend(movie_title, movies, similarity, top_n=5):
+    if movie_title not in movies['title'].values:
         return []
 
-    idx = movies[movies['title'] == movie].index[0]
-    sim_scores = list(enumerate(similarity[idx]))
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:6]  # Top 5
+    idx = movies[movies['title'] == movie_title].index[0]
+    distances = list(enumerate(similarity[idx]))
+    distances = sorted(distances, key=lambda x: x[1], reverse=True)[1:top_n+1]
 
     recommendations = []
-    for i, _ in sim_scores:
-        movie_id = movies.iloc[i].id
+    for i in distances:
+        movie_id = movies.iloc[i[0]]['id']
         details = fetch_movie_details(movie_id)
         recommendations.append(details)
-    return recommendations
 
+    return recommendations
