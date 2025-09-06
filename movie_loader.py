@@ -1,22 +1,18 @@
 import os
-import subprocess
 import pandas as pd
 import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import subprocess
 
 DATASET_FILE = "movies_metadata.csv"
 KAGGLE_DATASET = "rounakbanik/the-movies-dataset"
 
 @st.cache_data(show_spinner=False)
 def load_movies():
-    """
-    Load movies from movies_metadata.csv (if present).
-    If not present, try to download from Kaggle using Streamlit secrets.
-    Returns a cleaned DataFrame with columns: id (TMDB id), title, overview
-    """
+    """Load and clean movies metadata from CSV (local or Kaggle)."""
     if not os.path.exists(DATASET_FILE):
-        # optional fallback: download from Kaggle CLI if secrets are set
+        # Download from Kaggle if not found locally
         try:
             os.environ["KAGGLE_USERNAME"] = st.secrets["KAGGLE_USERNAME"]
             os.environ["KAGGLE_KEY"] = st.secrets["KAGGLE_KEY"]
@@ -26,24 +22,16 @@ def load_movies():
             )
         except Exception as e:
             raise FileNotFoundError(
-                f"{DATASET_FILE} not found in repo and Kaggle download failed. "
-                f"Add the CSV to your repo or set KAGGLE_USERNAME/KAGGLE_KEY in secrets. Details: {e}"
+                f"{DATASET_FILE} missing and Kaggle download failed: {e}"
             )
 
     df = pd.read_csv(DATASET_FILE, low_memory=False)
 
-    # pick the available title column, standardize to 'title'
-    title_col = "title" if "title" in df.columns else ("original_title" if "original_title" in df.columns else None)
-    if title_col is None:
-        raise ValueError("CSV must contain 'title' or 'original_title'.")
-    if "overview" not in df.columns:
-        raise ValueError("CSV must contain 'overview'.")
-    if "id" not in df.columns:
-        raise ValueError("CSV must contain 'id' (TMDB movie id).")
+    # Pick title column
+    title_col = "title" if "title" in df.columns else "original_title"
+    df = df[["id", title_col, "overview"]].rename(columns={title_col: "title"}).dropna()
 
-    df = df[["id", title_col, "overview"]].rename(columns={title_col: "title"}).dropna(subset=["title", "overview"])
-
-    # Coerce TMDB ids -> integers, drop invalid rows
+    # Ensure TMDB IDs are integers
     df["id"] = pd.to_numeric(df["id"], errors="coerce")
     df = df.dropna(subset=["id"])
     df["id"] = df["id"].astype(int)
@@ -54,14 +42,13 @@ def load_movies():
 
 @st.cache_resource(show_spinner=False)
 def build_text_model(movies):
-    """Build TF-IDF + cosine similarity on overview; returns similarity matrix."""
+    """Build TF-IDF + cosine similarity model."""
     tfidf = TfidfVectorizer(stop_words="english")
     mat = tfidf.fit_transform(movies["overview"].astype(str))
-    sim = cosine_similarity(mat, mat)
-    return sim
+    return cosine_similarity(mat, mat)
 
 def similar_by_title(title, movies, similarity, top_n=5):
-    """Return indices (row numbers) of the top_n similar movies for a given title."""
+    """Return indices of similar movies given a title."""
     indexer = pd.Series(movies.index, index=movies["title"].str.lower()).drop_duplicates()
     key = str(title).lower()
     if key not in indexer:
