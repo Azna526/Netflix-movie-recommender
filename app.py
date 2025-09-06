@@ -1,5 +1,5 @@
 import streamlit as st
-from movie_loader import load_movies, load_similarity, recommend, fetch_movie_details
+from movie_loader import load_movies, fetch_movie_details
 
 # ===============================
 # Streamlit UI
@@ -7,43 +7,34 @@ from movie_loader import load_movies, load_similarity, recommend, fetch_movie_de
 st.title("🍿 Netflix Movie Recommender (with TMDb Posters, Ratings & Links)")
 
 # Load dataset safely
-with st.spinner("Loading movies..."):
-    try:
+try:
+    with st.spinner("📥 Loading movies dataset..."):
         movies = load_movies()
-    except Exception as e:
-        st.error(f"❌ Failed to load data: {e}")
-        st.stop()
+except Exception as e:
+    st.error("❌ Failed to load movies dataset. Please check Kaggle setup or dataset availability.")
+    st.stop()
 
-# Load similarity safely
-with st.spinner("Loading similarity data..."):
-    try:
-        similarity = load_similarity()
-    except Exception as e:
-        st.error(f"❌ Failed to load similarity data: {e}")
-        st.stop()
-
-# Dropdown to pick a movie
+# Movie selection
 movie_list = movies['title'].values
-selected_movie = st.selectbox("Choose a movie:", movie_list)
+selected_movie = st.selectbox("🎬 Choose a movie:", movie_list)
 
-# Show recommendations
-if st.button("Recommend"):
+# Show movie details when button clicked
+if st.button("🔍 Recommend"):
     try:
-        recommended_movies = recommend(selected_movie, movies, similarity)
+        movie_id = movies[movies['title'] == selected_movie]['id'].values[0]
+        title, poster_url, rating, overview, link = fetch_movie_details(movie_id)
 
-        for movie_id in recommended_movies:
-            title, poster_url, rating, overview = fetch_movie_details(movie_id)
+        st.subheader(title)
+        if poster_url:
+            st.image(poster_url, width=300)
 
-            st.subheader(title)
-            if poster_url:
-                st.image(poster_url, width=300)
-            st.write(f"⭐ Rating: {rating}")
-            st.write("📖 Overview:")
-            st.write(overview)
-            st.markdown(
-                f"[🔗 More Info](https://www.themoviedb.org/movie/{movie_id})",
-                unsafe_allow_html=True
-            )
-            st.markdown("---")
+        st.write(f"⭐ **Rating:** {rating}")
+        st.write("📖 **Overview:**")
+        st.write(overview)
+
+        if link:
+            st.markdown(f"[🔗 View on TMDb]({link})")
+
     except Exception as e:
-        st.error(f"⚠️ Failed to generate recommendations: {e}")
+        st.error("❌ Failed to fetch movie details. Please check TMDb API key.")
+
