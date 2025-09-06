@@ -1,8 +1,15 @@
 import os
 import pickle
 import pandas as pd
+import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import streamlit as st
+
+# ===============================
+# API Key from Streamlit Secrets
+# ===============================
+TMDB_API_KEY = st.secrets["tmdb"]["api_key"]
 
 # ===============================
 # Load Movies Dataset
@@ -37,6 +44,23 @@ def load_similarity(movies, path="similarity.pkl"):
         pickle.dump(similarity, f)
 
     return similarity
+
+# ===============================
+# Fetch TMDb Movie Details
+# ===============================
+def fetch_movie_details(movie_id):
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        poster_path = data.get("poster_path", "")
+        rating = data.get("vote_average", "N/A")
+        overview = data.get("overview", "No overview available.")
+        title = data.get("title", "Unknown Title")
+        link = f"https://www.themoviedb.org/movie/{movie_id}"
+        poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ""
+        return title, poster_url, rating, overview, link
+    return "Unknown", "", "N/A", "Details not available.", "#"
 
 # ===============================
 # Recommend Movies
