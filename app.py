@@ -14,19 +14,19 @@ with st.spinner("Loading movies..."):
 movie_list = movies['title'].values
 selected_movie = st.selectbox("Choose a movie:", movie_list)
 
-# Show recommendations
+# Show recommendations when button clicked
 if st.button("Recommend"):
-    st.subheader(f"🎬 Recommended movies similar to: {selected_movie}")
-    recommendations = recommend(selected_movie, movies, similarity, top_n=5)
+    recommendations = recommend(selected_movie, movies, similarity, top_n=6)  # 6 movies for grid
 
     if not recommendations:
-        st.warning("No recommendations found. Try another movie.")
+        st.error("No recommendations found.")
     else:
-        for title, poster_url, rating, overview, link in recommendations:
-            with st.container():
-                st.image(poster_url, width=200)
-                st.markdown(f"### [{title}]({link})")  # clickable link
-                st.write(f"⭐ Rating: {rating}")
-                st.write("📖 Overview:")
-                st.write(overview)
-                st.markdown("---")
+        cols = st.columns(3)  # 3 movies per row
+
+        for idx, (title, poster_url, rating, overview, link) in enumerate(recommendations):
+            with cols[idx % 3]:
+                st.image(poster_url, width=200, caption=title)
+                st.markdown(f"⭐ **{rating}**")
+                st.markdown(f"[🔗 View on TMDb]({link})")
+                with st.expander("📖 Overview"):
+                    st.write(overview)
