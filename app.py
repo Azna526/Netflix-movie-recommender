@@ -4,7 +4,7 @@ from movie_loader import load_movies, fetch_movie_details
 # ===============================
 # Streamlit UI
 # ===============================
-st.title("🍿 Netflix Movie Recommender (with TMDb Posters, Ratings & Links)")
+st.title("🍿 Netflix Movie Recommender (NLP)")
 
 # Load dataset safely
 try:
