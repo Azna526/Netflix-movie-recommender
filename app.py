@@ -1,24 +1,28 @@
-import pandas as pd
-import requests
+import streamlit as st
+from movie_loader import load_movies, fetch_movie_details
 
-TMDB_API_KEY = "0d309fbe7061ac46435369d2349288ba"
+# ===============================
+# Streamlit UI
+# ===============================
+st.title("🍿 Netflix Movie Recommender (with TMDb Posters & Links)")
 
-def load_movies():
-    movies = pd.read_csv("movies_metadata.csv", low_memory=False)
-    movies = movies[['id', 'title']].dropna().drop_duplicates().reset_index(drop=True)
-    return movies
+with st.spinner("Loading movies..."):
+    movies = load_movies()
 
-def fetch_movie_details(movie_id, api_key=TMDB_API_KEY):
-    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={api_key}&language=en-US"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        poster_path = data.get("poster_path", "")
-        rating = data.get("vote_average", "N/A")
-        overview = data.get("overview", "No overview available.")
-        title = data.get("title", "Unknown Title")
-        poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ""
-        movie_url = f"https://www.themoviedb.org/movie/{movie_id}"  # 🔗 direct TMDb link
-        return title, poster_url, rating, overview, movie_url
-    return "Unknown", "", "N/A", "Details not available.", ""
+movie_list = movies['title'].values
+selected_movie = st.selectbox("Choose a movie:", movie_list)
 
+if st.button("Recommend"):
+    movie_id = movies[movies['title'] == selected_movie]['id'].values[0]
+    title, poster_url, rating, overview, movie_url = fetch_movie_details(movie_id)
+
+    st.subheader(title)
+    if poster_url:
+        st.image(poster_url, width=300)
+
+    st.write(f"⭐ Rating: {rating}")
+    st.write("📖 Overview:")
+    st.write(overview)
+
+    if movie_url:
+        st.markdown(f"[🔗 View on TMDb]({movie_url})", unsafe_allow_html=True)
