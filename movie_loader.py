@@ -1,45 +1,27 @@
 import os
 import pandas as pd
 import requests
-import kaggle
 
-# ===============================
-# API Keys (from Streamlit secrets)
-# ===============================
-TMDB_API_KEY = os.getenv("TMDB_API_KEY")
-KAGGLE_USERNAME = os.getenv("KAGGLE_USERNAME")
-KAGGLE_KEY = os.getenv("KAGGLE_KEY")
-
-DATASET_PATH = "movies_metadata.csv"
-
-# ===============================
-# Download Kaggle Dataset
-# ===============================
-def download_dataset():
-    if not os.path.exists(DATASET_PATH):
-        print("📥 Downloading dataset from Kaggle...")
-
-        # Set Kaggle credentials dynamically
-        os.environ["KAGGLE_USERNAME"] = KAGGLE_USERNAME
-        os.environ["KAGGLE_KEY"] = KAGGLE_KEY
-
-        kaggle.api.authenticate()
-
-        kaggle.api.dataset_download_files(
-            "rounakbanik/the-movies-dataset",
-            path=".",
-            unzip=True
-        )
-        print("✅ Dataset downloaded and extracted.")
+# Your TMDB key
+TMDB_API_KEY = "0d309fbe7061ac46435369d2349288ba"
 
 # ===============================
 # Load Movies
 # ===============================
 def load_movies():
-    if not os.path.exists(DATASET_PATH):
-        download_dataset()
+    dataset_path = "movies_metadata.csv"
 
-    movies = pd.read_csv(DATASET_PATH, low_memory=False)
+    # If file not present, download via Kaggle API
+    if not os.path.exists(dataset_path):
+        import kaggle
+        kaggle.api.authenticate()
+        kaggle.api.dataset_download_files(
+            "rounakbanik/the-movies-dataset",
+            path=".",
+            unzip=True
+        )
+
+    movies = pd.read_csv(dataset_path, low_memory=False)
     movies = movies[['id', 'title']].dropna().drop_duplicates().reset_index(drop=True)
     return movies
 
