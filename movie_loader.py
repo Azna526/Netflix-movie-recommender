@@ -2,6 +2,13 @@ import os
 import pickle
 import pandas as pd
 import subprocess
+import requests
+import streamlit as st
+
+# ===============================
+# Load API Key from Streamlit Secrets
+# ===============================
+TMDB_API_KEY = st.secrets["tmdb"]["api_key"]
 
 # ===============================
 # Load Movies Dataset
@@ -36,24 +43,48 @@ def load_similarity():
 
 
 # ===============================
+# Fetch Movie Details from TMDb
+# ===============================
+def fetch_movie_details(movie_id):
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
+    response = requests.get(url)
+    if response.status_code != 200:
+        return None
+
+    data = response.json()
+    poster_path = data.get("poster_path")
+    rating = data.get("vote_average")
+    link = f"https://www.themoviedb.org/movie/{movie_id}"
+
+    return {
+        "poster": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None,
+        "rating": rating,
+        "link": link
+    }
+
+
+# ===============================
 # Recommend Movies
 # ===============================
 def recommend(movie_title, movies, similarity, top_n=5):
     if movie_title not in movies['title'].values:
         return []
 
-    # Get index of selected movie
     idx = movies[movies['title'] == movie_title].index[0]
-
-    # Get similarity scores
     sim_scores = list(enumerate(similarity[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
 
-    # Skip first (same movie) and take top_n
-    recommended = []
+    recommendations = []
     for i in sim_scores[1: top_n + 1]:
         movie_id = movies.iloc[i[0]].id
         title = movies.iloc[i[0]].title
-        recommended.append((movie_id, title))
+        details = fetch_movie_details(movie_id)
 
-    return recommended
+        recommendations.append({
+            "title": title,
+            "poster": details["poster"] if details else None,
+            "rating": details["rating"] if details else "N/A",
+            "link": details["link"] if details else "#"
+        })
+
+    return recommendations
