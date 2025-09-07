@@ -1,66 +1,32 @@
 import os
-import pickle
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import pickle
+import requests
 
-# ================================
-# Paths for cached files
-# ================================
-MOVIES_PATH = "processed_movies.csv"
-SIM_PATH = "similarity.pkl"
-RAW_DATASET = "movies_metadata.csv"
+# TMDB key
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
-# ================================
-# Generate processed dataset if missing
-# ================================
-def generate_data():
-    if not os.path.exists(RAW_DATASET):
-        raise FileNotFoundError(
-            f"{RAW_DATASET} not found. Please make sure it's downloaded via Kaggle or provided."
-        )
-
-    print("⚡ Generating processed_movies.csv and similarity.pkl ...")
-
-    movies = pd.read_csv(RAW_DATASET, low_memory=False)
-    movies = movies[['id', 'title', 'overview']].dropna().reset_index(drop=True)
-
-    # TF-IDF vectorizer on overviews
-    tfidf = TfidfVectorizer(stop_words="english")
-    tfidf_matrix = tfidf.fit_transform(movies['overview'])
-
-    # Compute similarity
-    similarity = cosine_similarity(tfidf_matrix, tfidf_matrix)
-
-    # Save processed data
-    movies.to_csv(MOVIES_PATH, index=False)
-    with open(SIM_PATH, "wb") as f:
-        pickle.dump(similarity, f)
-
-    print("✅ Files generated successfully.")
-
-# ================================
-# Loaders
-# ================================
+# -------------------------------
+# Load preprocessed movies
+# -------------------------------
 def load_movies():
-    if not os.path.exists(MOVIES_PATH):
-        generate_data()
-    return pd.read_csv(MOVIES_PATH)
+    return pd.read_csv("processed_movies.csv")
 
 def load_similarity():
-    if not os.path.exists(SIM_PATH):
-        generate_data()
-    with open(SIM_PATH, "rb") as f:
+    with open("similarity.pkl", "rb") as f:
         return pickle.load(f)
 
-# ================================
-# Recommend function
-# ================================
-def recommend(title, movies, similarity, top_n=5):
-    if title not in movies['title'].values:
-        return []
-    idx = movies[movies['title'] == title].index[0]
-    scores = list(enumerate(similarity[idx]))
-    scores = sorted(scores, key=lambda x: x[1], reverse=True)[1:top_n+1]
-    return movies.iloc[[i[0] for i in scores]]['title'].tolist()
-
+# -------------------------------
+# Fetch TMDb details
+# -------------------------------
+def fetch_movie_details(movie_id):
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
+    r = requests.get(url)
+    if r.status_code == 200:
+        data = r.json()
+        poster = f"https://image.tmdb.org/t/p/w500{data.get('poster_path','')}" if data.get("poster_path") else ""
+        rating = data.get("vote_average", "N/A")
+        overview = data.get("overview", "No overview available.")
+        link = f"https://www.themoviedb.org/movie/{movie_id}"
+        return poster, rating, overview, link
+    return "", "N/A", "Details not available.", ""
