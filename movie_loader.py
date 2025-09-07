@@ -93,5 +93,3 @@ def fetch_movie_details(movie_id):
 
     poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ""
     return title, poster_url, rating, overview, link, credits
-
-   
