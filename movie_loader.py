@@ -1,56 +1,26 @@
-import os
-import pandas as pd
-import requests
-import subprocess
-import pickle
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import streamlit as st
+def fetch_movie_details(movie_id):
+    # Movie details
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
+    response = requests.get(url)
 
-# ===============================
-# Load API Keys
-# ===============================
-try:
-    KAGGLE_USERNAME = st.secrets["kaggle"]["username"]
-    KAGGLE_KEY = st.secrets["kaggle"]["key"]
-    TMDB_API_KEY = st.secrets["tmdb"]["api_key"]
+    if response.status_code != 200:
+        return "Unknown", "", "N/A", "Details not available.", "", "No credits available."
 
-    os.environ["KAGGLE_USERNAME"] = KAGGLE_USERNAME
-    os.environ["KAGGLE_KEY"] = KAGGLE_KEY
-except Exception as e:
-    st.error("❌ Missing secrets: Please set Kaggle + TMDb keys in Streamlit Cloud.")
-    raise e
+    data = response.json()
+    title = data.get("title", "Unknown Title")
+    poster_path = data.get("poster_path")
+    rating = data.get("vote_average", "N/A")
+    overview = data.get("overview", "No overview available.")
+    link = f"https://www.themoviedb.org/movie/{movie_id}"
 
-# ===============================
-# Load Movies Dataset (cached)
-# ===============================
-@st.cache_data(show_spinner=False)
-def load_movies():
-    dataset_path = "movies_metadata.csv"
+    # Credits (actors, director)
+    credits_url = f"https://api.themoviedb.org/3/movie/{movie_id}/credits?api_key={TMDB_API_KEY}&language=en-US"
+    credits_response = requests.get(credits_url)
+    credits_data = credits_response.json() if credits_response.status_code == 200 else {}
 
-    if not os.path.exists(dataset_path):
-        try:
-            st.info("📥 Downloading dataset from Kaggle (first run only)...")
-            subprocess.run([
-                "kaggle", "datasets", "download", "-d",
-                "rounakbanik/the-movies-dataset",
-                "-p", ".", "--unzip"
-            ], check=True)
-        except Exception as e:
-            st.error("❌ Failed to download dataset from Kaggle. Check Kaggle setup.")
-            raise e
+    cast = [c['name'] for c in credits_data.get("cast", [])[:3]]
+    director = [c['name'] for c in credits_data.get("crew", []) if c['job'] == "Director"]
+    credits = f"Stars: {', '.join(cast)} | Director: {', '.join(director)}"
 
-    movies = pd.read_csv(dataset_path, low_memory=False)
-    movies = movies[['id', 'title', 'overview']].dropna().drop_duplicates().reset_index(drop=True)
-    return movies
-
-# ===============================
-# Build Similarity Matrix (cached)
-# ===============================
-@st.cache_resource(show_spinner=False)
-def build_similarity(movies):
-    tfidf = TfidfVectorizer(stop_words="english")
-    tfidf_matrix = tfidf.fit_transform(movies['overview'])
-    similarity = cosine_similarity(tfidf_matrix, tfidf_matrix)
-    return similarity
-
+    poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ""
+    return title, poster_url, rating, overview, link, credits
