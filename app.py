@@ -6,7 +6,7 @@ from movie_loader import load_movies, recommend
 # Streamlit Page Setup
 # ===============================
 st.set_page_config(page_title="Netflix Movie Recommender", layout="wide")
-st.title("🍿 Netflix Movie Recommender (Top 5 with Posters, Ratings, Links & Credits)")
+st.title("🍿 Netflix Movie Recommender ")
 
 # ===============================
 # Load Movies
