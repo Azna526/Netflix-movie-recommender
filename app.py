@@ -1,31 +1,35 @@
 import streamlit as st
 from movie_loader import load_movies, load_similarity, recommend
 
-# ===============================
+# ================================
+# App Title
+# ================================
+st.set_page_config(page_title="Netflix Movie Recommender", layout="centered")
+st.title("🍿 Netflix Movie Recommender (with TMDb)")
+
+# ================================
 # Load Data
-# ===============================
+# ================================
+st.write("⏳ Loading data...")
 movies = load_movies()
 similarity = load_similarity()
+st.success("✅ Data loaded successfully!")
 
-# ===============================
-# Streamlit UI
-# ===============================
-st.title("🍿 Netflix Movie Recommender (with TMDb Posters, Ratings & Links)")
+# ================================
+# Movie Selection
+# ================================
+movie_list = movies['title'].values
+selected_movie = st.selectbox("🎬 Choose a movie:", movie_list)
 
-selected_movie = st.selectbox("🎬 Choose a movie:", movies['title'].values)
-
+# ================================
+# Recommend Movies
+# ================================
 if st.button("🔍 Recommend"):
-    recommendations = recommend(selected_movie, movies, similarity)
+    recommendations = recommend(selected_movie, movies, similarity, top_n=5)
 
-    if not recommendations:
-        st.warning("No recommendations found.")
+    if recommendations:
+        st.subheader(f"🎥 Because you watched **{selected_movie}**, you might like:")
+        for i, rec in enumerate(recommendations, start=1):
+            st.write(f"**{i}.** {rec}")
     else:
-        st.subheader("Recommended Movies:")
-        cols = st.columns(5)
-
-        for idx, rec in enumerate(recommendations):
-            with cols[idx % 5]:
-                if rec["poster"]:
-                    st.image(rec["poster"], use_container_width=True)
-                st.markdown(f"**[{rec['title']}]({rec['link']})**")
-                st.caption(f"⭐ {rec['rating']}")
+        st.warning("⚠️ No recommendations found for this movie.")
