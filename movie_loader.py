@@ -1,32 +1,23 @@
-import os
 import pandas as pd
 import pickle
 import requests
+import io
 
-# TMDB key
-TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+# GitHub raw URLs (replace with your repo username + branch)
+MOVIES_URL = "https://raw.githubusercontent.com/Azna526/Netflix-movie-recommender/main/processed_movies.csv"
+SIM_URL = "https://raw.githubusercontent.com/Azna526/Netflix-movie-recommender/main/similarity.pkl"
 
-# -------------------------------
-# Load preprocessed movies
-# -------------------------------
 def load_movies():
-    return pd.read_csv("processed_movies.csv")
+    try:
+        return pd.read_csv(MOVIES_URL)
+    except Exception as e:
+        raise FileNotFoundError(f"❌ Could not load processed_movies.csv from GitHub: {e}")
 
 def load_similarity():
-    with open("similarity.pkl", "rb") as f:
-        return pickle.load(f)
+    try:
+        response = requests.get(SIM_URL)
+        response.raise_for_status()
+        return pickle.load(io.BytesIO(response.content))
+    except Exception as e:
+        raise FileNotFoundError(f"❌ Could not load similarity.pkl from GitHub: {e}")
 
-# -------------------------------
-# Fetch TMDb details
-# -------------------------------
-def fetch_movie_details(movie_id):
-    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
-    r = requests.get(url)
-    if r.status_code == 200:
-        data = r.json()
-        poster = f"https://image.tmdb.org/t/p/w500{data.get('poster_path','')}" if data.get("poster_path") else ""
-        rating = data.get("vote_average", "N/A")
-        overview = data.get("overview", "No overview available.")
-        link = f"https://www.themoviedb.org/movie/{movie_id}"
-        return poster, rating, overview, link
-    return "", "N/A", "Details not available.", ""
