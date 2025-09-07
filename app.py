@@ -1,45 +1,61 @@
 import streamlit as st
-import pandas as pd
-from movie_loader import load_movies, load_similarity, fetch_movie_details
-import numpy as np
+from movie_loader import (
+    load_movies,
+    load_similarity,
+    recommend,
+    fetch_movie_details,
+)
 
-# -------------------------------
-# Load Data
-# -------------------------------
-movies = load_movies()
-similarity = load_similarity()
+st.set_page_config(page_title="Netflix Movie Recommender", layout="wide")
+st.title("🍿 Netflix Movie Recommender (with TMDb Posters, Ratings & Links)")
 
-st.title("🍿 Netflix Movie Recommender ")
+with st.spinner("Loading data..."):
+    movies = load_movies()
+    similarity = load_similarity()
+st.success("✅ Data loaded successfully!")
 
-# Dropdown
-movie_list = movies['title'].values
-selected_movie = st.selectbox("Choose a movie:", movie_list)
+# Movie picker
+movie_list = movies["title"].dropna().drop_duplicates().sort_values().tolist()
+selected_movie = st.selectbox("🎬 Choose a movie:", movie_list)
 
-# -------------------------------
-# Recommend function
-# -------------------------------
-def recommend(movie_title, n=5):
-    idx = movies[movies['title'] == movie_title].index[0]
-    distances = list(enumerate(similarity[idx]))
-    distances = sorted(distances, key=lambda x: x[1], reverse=True)[1:n+1]
-    recs = []
-    for i, _ in distances:
-        movie_id = movies.iloc[i]['id']
-        title = movies.iloc[i]['title']
-        poster, rating, overview, link = fetch_movie_details(movie_id)
-        recs.append((title, poster, rating, overview, link))
-    return recs
+# Show selected movie brief
+details = fetch_movie_details(selected_movie, movies)
+if details:
+    col_a, col_b = st.columns([1, 2])
+    with col_a:
+        if details["poster_url"]:
+            st.image(details["poster_url"], use_column_width=True)
+        else:
+            st.write("No poster available.")
+    with col_b:
+        st.subheader(details["title"])
+        st.markdown(f"**⭐ Rating:** {details['rating']:.1f}")
+        if details["link"]:
+            st.markdown(f"[TMDb page]({details['link']})")
+        if details["overview"]:
+            st.caption(details["overview"])
 
-# -------------------------------
-# UI
-# -------------------------------
-if st.button("Recommend"):
-    results = recommend(selected_movie, 5)
-    for title, poster, rating, overview, link in results:
-        st.subheader(title)
-        if poster:
-            st.image(poster, width=250)
-        st.write(f"⭐ Rating: {rating}")
-        st.write(f"📖 Overview: {overview}")
-        st.markdown(f"[🔗 More Info]({link})")
-        st.markdown("---")
+st.write("---")
+
+# Recommendations
+if st.button("🔎 Recommend"):
+    recs = recommend(selected_movie, movies, similarity, top_n=5)
+    if not recs:
+        st.warning("No recommendations found for this title.")
+    else:
+        st.subheader(f"Because you watched **{selected_movie}**, you might like:")
+        for rec in recs:
+            c1, c2 = st.columns([1, 3])
+            with c1:
+                if rec["poster_url"]:
+                    st.image(rec["poster_url"], use_column_width=True)
+                else:
+                    st.write("No poster")
+            with c2:
+                st.markdown(f"### {rec['title']}")
+                st.markdown(f"**⭐ Rating:** {rec['rating']:.1f}")
+                if rec["link"]:
+                    st.markdown(f"[TMDb link]({rec['link']})")
+                if rec["overview"]:
+                    st.caption(rec["overview"])
+
