@@ -1,35 +1,45 @@
 import streamlit as st
-from movie_loader import load_movies, load_similarity, recommend
+import pandas as pd
+from movie_loader import load_movies, load_similarity, fetch_movie_details
+import numpy as np
 
-# ================================
-# App Title
-# ================================
-st.set_page_config(page_title="Netflix Movie Recommender", layout="centered")
-st.title("🍿 Netflix Movie Recommender (with TMDb)")
-
-# ================================
+# -------------------------------
 # Load Data
-# ================================
-st.write("⏳ Loading data...")
+# -------------------------------
 movies = load_movies()
 similarity = load_similarity()
-st.success("✅ Data loaded successfully!")
 
-# ================================
-# Movie Selection
-# ================================
+st.title("🍿 Netflix Movie Recommender ")
+
+# Dropdown
 movie_list = movies['title'].values
-selected_movie = st.selectbox("🎬 Choose a movie:", movie_list)
+selected_movie = st.selectbox("Choose a movie:", movie_list)
 
-# ================================
-# Recommend Movies
-# ================================
-if st.button("🔍 Recommend"):
-    recommendations = recommend(selected_movie, movies, similarity, top_n=5)
+# -------------------------------
+# Recommend function
+# -------------------------------
+def recommend(movie_title, n=5):
+    idx = movies[movies['title'] == movie_title].index[0]
+    distances = list(enumerate(similarity[idx]))
+    distances = sorted(distances, key=lambda x: x[1], reverse=True)[1:n+1]
+    recs = []
+    for i, _ in distances:
+        movie_id = movies.iloc[i]['id']
+        title = movies.iloc[i]['title']
+        poster, rating, overview, link = fetch_movie_details(movie_id)
+        recs.append((title, poster, rating, overview, link))
+    return recs
 
-    if recommendations:
-        st.subheader(f"🎥 Because you watched **{selected_movie}**, you might like:")
-        for i, rec in enumerate(recommendations, start=1):
-            st.write(f"**{i}.** {rec}")
-    else:
-        st.warning("⚠️ No recommendations found for this movie.")
+# -------------------------------
+# UI
+# -------------------------------
+if st.button("Recommend"):
+    results = recommend(selected_movie, 5)
+    for title, poster, rating, overview, link in results:
+        st.subheader(title)
+        if poster:
+            st.image(poster, width=250)
+        st.write(f"⭐ Rating: {rating}")
+        st.write(f"📖 Overview: {overview}")
+        st.markdown(f"[🔗 More Info]({link})")
+        st.markdown("---")
