@@ -3,7 +3,7 @@ import streamlit as st
 from movie_loader import load_movies, recommend
 
 st.set_page_config(page_title="Netflix Movie Recommender (Top 5)", layout="wide")
-st.title("🍿 Netflix Movie Recommender (Top 5 with Posters, Ratings, Links & Credits)")
+st.title("🍿 Netflix Movie Recommender ")
 
 # load movies (cached)
 with st.spinner("📥 Loading movies dataset..."):
