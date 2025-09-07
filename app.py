@@ -47,7 +47,7 @@ def recommend(movie_title, movies, similarity):
 # ===============================
 # Streamlit UI
 # ===============================
-st.title("🍿 Netflix Movie Recommender (with TMDb)")
+st.title("🍿 Netflix Movie Recommender (with TMDb Posters & Details)")
 
 with st.spinner("Loading movies..."):
     movies = load_movies()
