@@ -1,60 +1,121 @@
-# app.py
 import streamlit as st
 from movie_loader import load_movies, recommend
 
-st.set_page_config(page_title="Netflix Movie Recommender (Top 5)", layout="wide")
-st.title("🍿 Netflix Movie Recommender")
+# ==============================
+# Page Config
+# ==============================
+st.set_page_config(page_title="Netflix Movie Recommender", layout="wide")
 
-# ===============================
-# Load movies
-# ===============================
+# ==============================
+# Custom CSS for Netflix Style
+# ==============================
+st.markdown("""
+<style>
+/* Background */
+.stApp {
+    background-color: #141414;
+    color: #fff;
+    font-family: Arial, sans-serif;
+}
+
+/* Title */
+.big-title {
+    font-size: 42px !important;
+    color: #E50914;
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+
+/* Buttons */
+div.stButton > button {
+    background-color: #E50914;
+    color: white;
+    font-size: 18px;
+    padding: 10px 25px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: 0.3s;
+}
+div.stButton > button:hover {
+    background-color: #b20710;
+}
+
+/* Movie Card */
+.recommend-card {
+    background-color: #1c1c1c;
+    padding: 15px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+    margin-bottom: 20px;
+    transition: transform 0.3s;
+}
+.recommend-card:hover {
+    transform: scale(1.05);
+}
+
+/* Poster */
+.movie-poster {
+    border-radius: 10px;
+    margin-bottom: 10px;
+    max-width: 100%;
+}
+
+/* Links */
+a {
+    color: #E50914;
+    text-decoration: none;
+    font-weight: bold;
+}
+a:hover {
+    text-decoration: underline;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ==============================
+# Title
+# ==============================
+st.markdown('<p class="big-title">🍿 Netflix Movie Recommender</p>', unsafe_allow_html=True)
+
+# ==============================
+# Load Movies
+# ==============================
 with st.spinner("📥 Loading movies dataset..."):
     try:
         movies = load_movies()
         st.success("✅ Movies loaded.")
     except Exception as e:
-        st.error("❌ Failed to load movies dataset. See Manage app logs or check Kaggle/TMDb secrets.")
+        st.error("❌ Failed to load movies dataset. Check logs or secrets.")
         st.stop()
 
-# ===============================
-# Movie selection
-# ===============================
+# ==============================
+# Movie Selection
+# ==============================
 movie_list = movies["title"].drop_duplicates().sort_values().tolist()
 selected = st.selectbox("🎬 Choose a movie:", movie_list)
 
-# ===============================
-# Recommendations
-# ===============================
-if st.button("🔍 Recommend top 5"):
+# ==============================
+# Recommend Button
+# ==============================
+if st.button("🔍 Recommend Top 5"):
     with st.spinner("🔎 Finding similar movies..."):
         try:
             recs = recommend(selected, movies, top_n=5)
         except Exception as e:
-            st.error("❌ Recommendation failed. See Manage app logs.")
-            raise
+            st.error("❌ Recommendation failed. See logs.")
+            st.stop()
 
     if not recs:
         st.warning("⚠️ No recommendations found.")
     else:
-        # Dynamically adjust columns (desktop: 5, tablet: 3, mobile: 2)
-        num_recs = len(recs)
-        if num_recs >= 5:
-            cols = st.columns(5)
-        elif num_recs >= 3:
-            cols = st.columns(3)
-        else:
-            cols = st.columns(2)
-
+        cols = st.columns(5)
         for i, rec in enumerate(recs):
-            col = cols[i % len(cols)]
-            with col:
-                st.subheader(rec.get("title", "Unknown"))
-                poster = rec.get("poster_url", "")
-                if poster:
-                    st.image(poster, use_container_width=True)  # ✅ fixed warning
-                st.write(f"⭐ **Rating:** {rec.get('rating', 'N/A')}")
-                st.write(rec.get("overview", "")[:400] + ("..." if len(rec.get("overview", "")) > 400 else ""))
-                st.write(f"🎭 **Credits:** {rec.get('credits','')}")
-                link = rec.get("link", "")
-                if link:
-                    st.markdown(f"[🔗 View on TMDb]({link})")
+            with cols[i % 5]:
+                st.markdown(f"""
+                <div class="recommend-card">
+                    <h4>{rec.get("title", "Unknown")}</h4>
+                    <img src="{rec.get("poster_url", "")}" class="movie-poster"><br>
+                    ⭐ {rec.get("rating", "N/A")}<br
