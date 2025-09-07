@@ -1,59 +1,64 @@
+# app.py
 import streamlit as st
 from movie_loader import load_movies, recommend
 
-st.set_page_config(page_title="Netflix Movie Recommender (Top 5)", layout="wide")
-st.title("🍿 Netflix Movie Recommender")
+# ===============================
+# Streamlit Page Setup
+# ===============================
+st.set_page_config(page_title="Netflix Movie Recommender", layout="wide")
+st.title("🍿 Netflix Movie Recommender (Top 5 with Posters, Ratings, Links & Credits)")
 
 # ===============================
-# Load movies
+# Load Movies
 # ===============================
 with st.spinner("📥 Loading movies dataset..."):
     try:
         movies = load_movies()
-        st.success("✅ Movies loaded.")
+        st.success("✅ Movies loaded successfully.")
     except Exception as e:
-        st.error("❌ Failed to load movies dataset. See Manage app logs or check Kaggle/TMDb secrets.")
+        st.error("❌ Failed to load movies dataset. Please check Kaggle/TMDb setup.")
         st.stop()
 
 # ===============================
-# Movie selection
+# Movie Selection
 # ===============================
 movie_list = movies["title"].drop_duplicates().sort_values().tolist()
 selected = st.selectbox("🎬 Choose a movie:", movie_list)
 
 # ===============================
-# Recommendations
+# Recommend Button
 # ===============================
 if st.button("🔍 Recommend top 5"):
     with st.spinner("🔎 Finding similar movies..."):
         try:
             recs = recommend(selected, movies, top_n=5)
         except Exception as e:
-            st.error("❌ Recommendation failed. See Manage app logs.")
-            raise
+            st.error("❌ Recommendation failed. Check logs for details.")
+            st.stop()
 
     if not recs:
         st.warning("⚠️ No recommendations found.")
     else:
-        # Dynamically adjust columns (desktop: 5, tablet: 3, mobile: 2)
-        num_recs = len(recs)
-        if num_recs >= 5:
-            cols = st.columns(5)
-        elif num_recs >= 3:
-            cols = st.columns(3)
-        else:
-            cols = st.columns(2)
-
+        # Show recommendations in 5 columns
+        cols = st.columns(5)
         for i, rec in enumerate(recs):
-            col = cols[i % len(cols)]
+            col = cols[i % 5]
             with col:
-                st.subheader(rec.get("title", "Unknown"))
+                title = rec.get("title", "Unknown")
                 poster = rec.get("poster_url", "")
-                if poster:
-                    st.image(poster, use_container_width=True)  # ✅ fixed warning
-                st.write(f"⭐ **Rating:** {rec.get('rating', 'N/A')}")
-                st.write(rec.get("overview", "")[:400] + ("..." if len(rec.get("overview", "")) > 400 else ""))
-                st.write(f"🎭 **Credits:** {rec.get('credits','')}")
-                link = rec.get("link", "")
-                if link:
-                    st.markdown(f"[🔗 View on TMDb]({link})")
+                rating = rec.get("rating", "N/A")
+                overview = rec.get("overview", "")
+                credits = rec.get("credits", "N/A")
+                link = rec.get("link", "#")
+
+                card_html = f"""
+                <div style="text-align:center; padding:10px;">
+                    <h4>{title}</h4>
+                    <img src="{poster}" style="width:100%; border-radius:10px;"><br>
+                    ⭐ {rating}<br>
+                    <p>{overview[:120]}{"..." if len(overview) > 120 else ""}</p>
+                    <p><b>Credits:</b> {credits}</p>
+                    <a href="{link}" target="_blank">🔗 View on TMDb</a>
+                </div>
+                """
+                st.markdown(card_html, unsafe_allow_html=True)
